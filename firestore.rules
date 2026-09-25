@@ -1,0 +1,31 @@
+// Reglas de seguridad de Cloud Firestore para IRONBLAZE.
+// Copia este contenido en Firebase → Firestore Database → Reglas → Publicar.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    // Correo verificado, o entrada con Google/Facebook
+    function verified() {
+      return signedIn() && (request.auth.token.email_verified == true
+        || request.auth.token.firebase.sign_in_provider != 'password');
+    }
+
+    // Nombres de usuario únicos: cualquiera puede comprobar si están libres
+    match /usernames/{name} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.keys().hasOnly(['uid']);
+      allow update: if signedIn() && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // Perfil y datos de cada usuario: solo su dueño
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+      match /{document=**} {
+        allow read, write: if verified() && request.auth.uid == uid;
+      }
+    }
+  }
+}
