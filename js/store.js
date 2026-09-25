@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.4.2';
+  const VERSION = '1.5.1';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -20,6 +20,7 @@
     createdAt: Date.now()
   });
 
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   let state;
   try { state = Object.assign(defaults(), JSON.parse(localStorage.getItem(KEY) || '{}')); }
   catch (e) { state = defaults(); }
@@ -36,6 +37,82 @@
     }
     st.dataVersion = DATA_VERSION;
   }
+
+  // ---------- Seguridad: limpieza de datos ----------
+  // Todo lo que entra de fuera (copias importadas, la nube, datos antiguos) se normaliza a tipos
+  // simples: números donde van números, textos con longitud máxima e identificadores sin símbolos.
+  // Así ningún dato manipulado puede colar HTML o código en la interfaz.
+  const S_TYPES = ['n', 'w', 'd', 'f'], KINDS = ['weight', 'bw', 'time', 'cardio'];
+  const str = (x, max = 200) => (x == null ? '' : String(x)).slice(0, max);
+  const num = x => (x === '' || x == null || !isFinite(+x)) ? '' : +x;
+  const ident = x => str(x, 64).replace(/[^\w.-]/g, '');
+  const arr = x => Array.isArray(x) ? x : [];
+  function cleanSet(s, withTargets) {
+    s = s || {};
+    const o = { type: S_TYPES.includes(s.type) ? s.type : 'n', w: num(s.w), r: num(s.r) };
+    if ('done' in s) o.done = !!s.done;
+    if (withTargets) {
+      if (s.tw !== undefined && num(s.tw) !== '') o.tw = num(s.tw);
+      if (s.tr !== undefined && num(s.tr) !== '') o.tr = num(s.tr);
+      if (Array.isArray(s.pr)) o.pr = s.pr.map(p => str(p, 30));
+    }
+    return o;
+  }
+  function cleanEx(e, withTargets) {
+    e = e || {};
+    return { exId: ident(e.exId), notes: str(e.notes, 2000), ss: e.ss ? ident(e.ss) : null, rest: num(e.rest) === '' ? null : Math.max(0, Math.min(3600, num(e.rest))), sets: arr(e.sets).slice(0, 100).map(s => cleanSet(s, withTargets)) };
+  }
+  function sanitizeWorkout(w, withTargets) {
+    w = w || {};
+    const start = isFinite(+w.start) ? +w.start : Date.now();
+    const o = {
+      id: ident(w.id) || uid(), title: str(w.title, 120), notes: str(w.notes, 5000), start, end: isFinite(+w.end) ? +w.end : start,
+      routineId: w.routineId ? ident(w.routineId) : null, exercises: arr(w.exercises).slice(0, 60).map(e => cleanEx(e, withTargets)).filter(e => e.exId)
+    };
+    if (w.rest && isFinite(+w.rest.end)) o.rest = { end: +w.rest.end, total: +w.rest.total || 0 };
+    return o;
+  }
+  function sanitizeRoutine(r) {
+    r = r || {};
+    return { id: ident(r.id) || uid(), name: str(r.name, 120), folder: str(r.folder, 60), exercises: arr(r.exercises).slice(0, 60).map(e => cleanEx(e)).filter(e => e.exId) };
+  }
+  function sanitizeCustom(c) {
+    c = c || {};
+    const id = ident(c.i);
+    return { i: id.startsWith('c_') ? id : 'c_' + (id || uid()), n: str(c.n, 80), b: arr(c.b).slice(0, 5).map(x => str(x, 40)), q: arr(c.q).slice(0, 5).map(x => str(x, 40)),
+      t: arr(c.t).slice(0, 5).map(x => str(x, 40)), s: arr(c.s).slice(0, 10).map(x => str(x, 40)), x: arr(c.x).slice(0, 30).map(x => str(x, 500)), custom: true, k: KINDS.includes(c.k) ? c.k : 'weight' };
+  }
+  function sanitizeAvatar(a) {
+    if (!a || typeof a !== 'object') return null;
+    if (a.type === 'img' && typeof a.data === 'string' && a.data.length < 400000 &&
+      (/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(a.data) || /^https:\/\/lh\d\.googleusercontent\.com\/[\w\-./=?&%]+$/.test(a.data))) return { type: 'img', data: a.data };
+    if (a.type === 'preset' && typeof a.e === 'string' && a.e.length <= 8 && !/[<>"'&]/.test(a.e)) return { type: 'preset', e: a.e, c: Math.max(0, Math.min(20, parseInt(a.c) || 0)) };
+    return null;
+  }
+  function sanitizeSettings(s) {
+    const d = defaults().settings;
+    s = Object.assign({}, d, s || {});
+    return Object.assign(s, {
+      name: str(s.name, 40) || d.name, unit: s.unit === 'lbs' ? 'lbs' : 'kg', restDefault: Math.max(0, Math.min(3600, +s.restDefault || 0)),
+      weekGoal: Math.max(1, Math.min(7, parseInt(s.weekGoal) || 4)), bodyweight: num(s.bodyweight), avatar: sanitizeAvatar(s.avatar),
+      lastExport: +s.lastExport || 0, sound: !!s.sound, vibrate: !!s.vibrate, keepAwake: !!s.keepAwake, notify: !!s.notify, backupReminder: !!s.backupReminder
+    });
+  }
+  function sanitizeState(st) {
+    st.workouts = arr(st.workouts).map(w => sanitizeWorkout(w));
+    st.routines = arr(st.routines).map(sanitizeRoutine);
+    st.custom = arr(st.custom).map(sanitizeCustom);
+    st.measures = arr(st.measures).map(m => {
+      const o = { id: ident(m && m.id) || uid(), date: isFinite(+(m && m.date)) ? +m.date : Date.now() };
+      ['weight', 'fat', 'waist', 'chest', 'arm', 'thigh'].forEach(k => { if (m && num(m[k]) !== '') o[k] = num(m[k]); });
+      return o;
+    });
+    st.active = st.active ? sanitizeWorkout(st.active, true) : null;
+    st.settings = sanitizeSettings(st.settings);
+    st.createdAt = isFinite(+st.createdAt) ? +st.createdAt : Date.now();
+    return st;
+  }
+  sanitizeState(state);
 
   // Copias automáticas en el propio dispositivo (una al día, se guardan las 3 últimas)
   function autoSnapshot() {
@@ -59,13 +136,23 @@
   function importData(obj) {
     state = Object.assign(defaults(), obj);
     state.settings = Object.assign(defaults().settings, state.settings);
-    migrate(state); indexExercises(); save(true);
+    migrate(state); sanitizeState(state); indexExercises(); save(true);
   }
   // Pide al navegador que no borre los datos aunque falte espacio
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
 
   let saveTimer = null;
+  // Revisión de los datos: cada guardado invalida la caché de cálculos (récords, historial…)
+  let rev = 0;
+  const memo = new Map();
+  function cached(key, fn) {
+    const k = rev + '|' + key;
+    if (memo.has(k)) return memo.get(k);
+    if (memo.size > 3000) memo.clear();
+    const v = fn(); memo.set(k, v); return v;
+  }
   function save(now, fromCloud) {
+    rev++; memo.clear();
     clearTimeout(saveTimer);
     const run = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('No se pudo guardar', e); } };
     if (now) run(); else saveTimer = setTimeout(run, 150);
@@ -80,8 +167,6 @@
   }
   window.addEventListener('beforeunload', () => save(true));
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
-
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
   // ---------- Ejercicios ----------
   const byId = new Map();
@@ -156,14 +241,26 @@
   }
 
   // Historial de un ejercicio: lista de {workout, sets}, más reciente primero
-  function exerciseHistory(exId) {
-    const out = [];
-    for (const w of state.workouts) {
-      for (const ex of w.exercises) {
-        if (ex.exId === exId && ex.sets.some(s => s.done)) out.push({ workout: w, sets: ex.sets.filter(s => s.done) });
+  // Índice ejercicio → apariciones en entrenos. Se construye una vez por revisión de datos,
+  // así las búsquedas de historial y récords no recorren todo el historial cada vez.
+  function exIndex() {
+    return cached('idx', () => {
+      const m = new Map();
+      for (const w of state.workouts) for (const ex of w.exercises) {
+        let a = m.get(ex.exId); if (!a) m.set(ex.exId, a = []);
+        a.push({ w, ex });
       }
-    }
-    return out.sort((a, b) => b.workout.start - a.workout.start);
+      return m;
+    });
+  }
+  function exerciseHistory(exId) {
+    return cached('h|' + exId, () => {
+      const out = [];
+      for (const { w, ex } of exIndex().get(exId) || []) {
+        if (ex.sets.some(s => s.done)) out.push({ workout: w, sets: ex.sets.filter(s => s.done) });
+      }
+      return out.sort((a, b) => b.workout.start - a.workout.start);
+    });
   }
 
   // Series del último entreno (columna "Anterior")
@@ -174,12 +271,14 @@
 
   // Récords de un ejercicio (opcionalmente excluyendo un entreno y/o solo antes de una fecha)
   function records(exId, excludeWorkoutId, beforeTs) {
+    return cached(`r|${exId}|${excludeWorkoutId || ''}|${beforeTs || ''}`, () => recordsRaw(exId, excludeWorkoutId, beforeTs));
+  }
+  function recordsRaw(exId, excludeWorkoutId, beforeTs) {
     const r = { weight: 0, e1rm: 0, volume: 0, reps: 0, sessionVolume: 0, bestSet: null };
-    for (const w of state.workouts) {
+    for (const { w, ex } of exIndex().get(exId) || []) {
       if (w.id === excludeWorkoutId) continue;
       if (beforeTs && w.start >= beforeTs) continue;
-      for (const ex of w.exercises) {
-        if (ex.exId !== exId) continue;
+      {
         let sv = 0;
         for (const s of ex.sets) {
           if (!s.done || s.type === 'w') continue;
@@ -214,9 +313,14 @@
 
   // Récords conseguidos en un entreno (comparado con entrenos anteriores)
   function workoutPRs(w) {
+    // Solo se cachean entrenos ya guardados (el que está en curso cambia con cada serie)
+    const saved = state.workouts.includes(w);
+    return saved ? cached(`p|${w.id}|${w.start}`, () => workoutPRsRaw(w)) : workoutPRsRaw(w);
+  }
+  function workoutPRsRaw(w) {
     const prs = [];
     for (const ex of w.exercises) {
-      const had = state.workouts.some(o => o.id !== w.id && o.start < w.start && o.exercises.some(e => e.exId === ex.exId && e.sets.some(s => s.done)));
+      const had = (exIndex().get(ex.exId) || []).some(({ w: o, ex: e }) => o.id !== w.id && o.start < w.start && e.sets.some(s => s.done));
       if (!had) continue;
       const prev = records(ex.exId, w.id, w.start);
       const k = kind(getEx(ex.exId));
@@ -305,7 +409,8 @@
     save, uid, GIF, HD, getEx, allExercises, kind, indexExercises, bodyweight,
     toDisplay, fromDisplay, unit, e1rm, workoutStats, exerciseHistory, previousSets,
     records, setPR, workoutPRs, streakWeeks, weekKey, PROGRAMS, VERSION,
-    autoSnapshot, snapshots, restoreSnapshot, importData, replaceWithEmpty,
+    autoSnapshot, snapshots, restoreSnapshot, importData, replaceWithEmpty, sanitizeWorkout, sanitizeState,
+    cached,
     reset() { state = defaults(); indexExercises(); save(true); }
   };
 })();

@@ -112,7 +112,7 @@
 
   function thumb(ex, cls = '') {
     if (ex.custom) return `<div class="thumb custom ${cls}">${esc(ex.n.charAt(0).toUpperCase())}</div>`;
-    return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" onerror="this.remove()"></div>`;
+    return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" decoding="async" data-rm-err></div>`;
   }
   const exSub = ex => `${tr('bodyParts', ex.b[0])} · ${tr('equipment', ex.q[0])}`;
 
@@ -122,8 +122,8 @@
     'linear-gradient(135deg,#4da3ff,#1f4fa8)', 'linear-gradient(135deg,#2fd67b,#127a43)', 'linear-gradient(135deg,#c77dff,#6a2bb3)'];
   function avatarHTML(cls = '') {
     const a = S().settings.avatar, name = S().settings.name || '?';
-    if (a && a.type === 'img' && a.data) return `<div class="avatar ${cls} has-img"><img src="${a.data}" alt=""></div>`;
-    if (a && a.type === 'preset') return `<div class="avatar ${cls} preset" style="background:${AV_COLORS[a.c % AV_COLORS.length]}">${a.e}</div>`;
+    if (a && a.type === 'img' && a.data) return `<div class="avatar ${cls} has-img"><img src="${esc(a.data)}" alt="" decoding="async"></div>`;
+    if (a && a.type === 'preset') return `<div class="avatar ${cls} preset" style="background:${AV_COLORS[(parseInt(a.c) || 0) % AV_COLORS.length]}">${esc(a.e)}</div>`;
     return `<div class="avatar ${cls}">${esc(name.charAt(0).toUpperCase())}</div>`;
   }
   // Recorta al centro y reduce a 256 px para que ocupe poco (se guarda y se sincroniza)
@@ -193,7 +193,7 @@
   // ---------------- Feedback ----------------
   let toastT;
   function toast(msg, cls = '') {
-    const t = $('#toast'); t.className = 'toast ' + cls; t.innerHTML = msg;
+    const t = $('#toast'); t.className = 'toast ' + cls; t.textContent = msg; // siempre texto plano (nunca HTML)
     requestAnimationFrame(() => t.classList.add('show'));
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
   }
@@ -788,7 +788,7 @@
       const sel = opts.selected && opts.selected.has(e.i), n = usage.get(e.i);
       if (f.view === 'grid') {
         return `<div class="ex-card ${sel ? 'selected' : ''}" data-id="${e.i}">
-          <div class="ex-card-media">${e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" src="${Store.GIF(e.i)}" alt="${esc(e.n)}" onerror="this.remove()">`}
+          <div class="ex-card-media">${e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err>`}
             ${Store.HD(e.i) ? '<span class="hd-badge">HD</span>' : ''}
             ${opts.selectable ? `<div class="check-dot">${sel ? ic('check') : ''}</div>` : ''}</div>
           <div class="ex-card-body"><div class="ex-card-name">${esc(e.n)}</div><div class="ex-card-sub">${exSub(e)}${n ? ` · <span style="color:var(--orange)">${n}×</span>` : ''}</div></div></div>`;
@@ -945,9 +945,9 @@
         if (t === 'sum') body = `
           ${ex.custom ? `<div class="ex-media" style="background:var(--card)"><div style="font-size:80px;color:var(--orange);font-weight:800">${esc(ex.n.charAt(0).toUpperCase())}</div></div>` :
             mode === 'hd' ? `<div class="ex-media hd"><span class="loading">Cargando fotos HD…</span>
-                <img class="f0" src="${hd[0]}" alt="${esc(ex.n)}" onload="this.parentNode.querySelector('.loading')?.remove()">${hd[1] ? `<img class="f1" src="${hd[1]}" alt="">` : ''}
+                <img class="f0" src="${hd[0]}" alt="${esc(ex.n)}" data-media>${hd[1] ? `<img class="f1" src="${hd[1]}" alt="">` : ''}
                 <span class="media-badge">HD · INICIO ⇄ FINAL</span></div>` :
-            `<div class="ex-media gif"><span class="loading">Cargando animación…</span><img src="${Store.GIF(ex.i)}" alt="${esc(ex.n)}" onload="this.previousElementSibling.remove()" onerror="this.previousElementSibling.textContent='Sin conexión: no se pudo cargar la animación'"><span class="media-badge">▶ ANIMACIÓN</span></div>`}
+            `<div class="ex-media gif"><span class="loading">Cargando animación…</span><img src="${Store.GIF(ex.i)}" alt="${esc(ex.n)}" data-media><span class="media-badge">▶ ANIMACIÓN</span></div>`}
           ${hd && !ex.custom ? `<div class="seg mt-s"><button class="${mode === 'hd' ? 'on' : ''}" data-act="media" data-v="hd">📷 Fotos HD</button><button class="${mode === 'gif' ? 'on' : ''}" data-act="media" data-v="gif">▶ Animación</button></div>` : ''}
           <div class="ex-title">${esc(ex.n)}</div>
           ${ex.es ? `<div class="muted" style="font-size:13px;margin:-4px 0 8px">${esc(cap(ex.en))}</div>` : ''}
@@ -1231,7 +1231,7 @@
         const pos = group.indexOf(ex);
         if (pos < group.length - 1) {
           const next = group[pos + 1];
-          if (next.sets.some(x => !x.done)) { toast(`➡️ Superserie: ahora ${esc(Store.getEx(next.exId).n)}`); return; }
+          if (next.sets.some(x => !x.done)) { toast(`➡️ Superserie: ahora ${Store.getEx(next.exId).n}`); return; }
         }
         const restG = group[group.length - 1].rest ?? S().settings.restDefault;
         if (restG > 0) startRest(restG);
@@ -1745,6 +1745,8 @@
           <button class="sheet-opt" data-act="csv">${ic('list')}<span>Exportar historial a CSV<span class="sub">Para Excel / Google Sheets</span></span></button>
           <button class="sheet-opt" data-act="demo">${ic('dumbbell')}<span>Cargar datos de ejemplo</span></button>
           <button class="sheet-opt danger" data-act="reset">${ic('trash')}<span>Borrar todos los datos</span></button>
+          <h2 class="section">App</h2>
+          <button class="sheet-opt" data-act="checkUpdate">${ic('repeat')}<span>Buscar actualizaciones<span class="sub">Versión instalada: ${Store.VERSION}</span></span></button>
           <input type="file" accept=".json,application/json" id="imp" class="hidden">
           <div class="muted center mt" style="font-size:12px;line-height:1.6;padding:20px 0">
             <div class="brand" style="font-size:22px">IRON<b>BLAZE</b></div>
@@ -1767,6 +1769,11 @@
       actions: {
         back: (t, e, L) => L.close(),
         login: () => openAuth('login'), signup: () => openAuth('signup'), account: () => openAccount(), logout: confirmLogout,
+        checkUpdate: async (t) => {
+          const sub = t.querySelector('.sub'); sub.textContent = 'Buscando…';
+          const r = await checkForUpdate();
+          sub.textContent = r === 'new' ? '¡Hay una versión nueva! Pulsa "Actualizar" arriba' : r === 'none' ? `Ya tienes la última versión (${Store.VERSION})` : 'Sin conexión: inténtalo más tarde';
+        },
         name: async (t, e, L) => { const n = await promptM('Tu nombre', S().settings.name); if (n && n.trim()) { S().settings.name = n.trim(); save(); L.render(); } },
         bw: async (t, e, L) => { if (await askBodyweight()) L.render(); },
         goal: (t, e, L) => { S().settings.weekGoal = Math.max(1, Math.min(7, S().settings.weekGoal + +t.dataset.d)); save(); L.render(); },
@@ -1793,7 +1800,7 @@
         csv: () => {
           const rows = [['fecha', 'entreno', 'ejercicio', 'serie', 'tipo', `peso_${Store.unit()}`, 'reps', 'duracion_min']];
           S().workouts.forEach(w => w.exercises.forEach(e => e.sets.forEach((s, i) => rows.push([new Date(w.start).toISOString(), w.title, Store.getEx(e.exId).n, i + 1, typeName[s.type], Store.toDisplay(s.w), s.r, Math.round((w.end - w.start) / 6e4)]))));
-          download(`ironblaze-historial-${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + rows.map(r => r.map(x => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'), 'text/csv');
+          download(`ironblaze-historial-${new Date().toISOString().slice(0, 10)}.csv`, '﻿' + rows.map(r => r.map(x => { let v = String(x ?? ''); if (/^[=+\-@\t\r]/.test(v) && isNaN(+v)) v = "'" + v; return `"${v.replace(/"/g, '""')}"`; }).join(',')).join('\n'), 'text/csv');
         },
         demo: async (t, e, L) => { if (await confirmM('Datos de ejemplo', 'Se añadirán ~10 semanas de entrenamientos ficticios.', 'Generar')) { seedDemo(); toast('✅ Datos de ejemplo cargados'); L.render(); } },
         reset: async () => {
@@ -1837,6 +1844,8 @@
     const c = Cloud.st;
     hideSplash();
     if (c.user) { const g = stack.find(l => l.def.id === 'auth'); if (g) g.close(true); onboarding(); return; }
+    // Sin conexión y con sesión guardada: entra igualmente (los datos están en el móvil y se sincronizan al volver la conexión)
+    if (!c.loaded && localStorage.getItem('ib.session')) { onboarding(); return; }
     if (c.configured && !S().settings.authSkipped) { if (!gateOpen()) openAuth('login', { gate: true }); }
     else onboarding();
   }
@@ -1965,7 +1974,7 @@
     catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); }
   }
 
-  let verifyOpen = false;
+  let verifyOpen = false, verifyDismissed = false;
   function openVerify(justCreated) {
     if (verifyOpen || !Cloud.st.user) return;
     verifyOpen = true;
@@ -1988,7 +1997,7 @@
           else { t.textContent = 'Ya lo he verificado'; const er = L.el.querySelector('.auth-err'); er.textContent = 'Todavía no aparece verificado. Pulsa el enlace del correo y vuelve a intentarlo.'; er.classList.remove('hidden'); }
         },
         resend: async (t) => { try { await Cloud.resendVerification(); toast('📧 Correo reenviado'); t.disabled = true; setTimeout(() => t.disabled = false, 30000); } catch (ex) { toast(ex.message); } },
-        later: (t, e, L) => L.close(),
+        later: (t, e, L) => { verifyDismissed = true; L.close(); },
         out: async (t, e, L) => { L.close(); await logout(false); }
       },
       onClose: () => { verifyOpen = false; }
@@ -2013,7 +2022,7 @@
         ok: async (t, e, L) => {
           const v = L.el.querySelector('[data-f="u"]').value.trim(), er = L.el.querySelector('.auth-err');
           t.disabled = true;
-          try { await Cloud.claimUsername(v); L.close(); toast(`✅ ¡Hola, @${esc(v)}!`); }
+          try { await Cloud.claimUsername(v); L.close(); toast(`✅ ¡Hola, @${v}!`); }
           catch (ex) { er.textContent = ex.message; er.classList.remove('hidden'); t.disabled = false; }
         },
         out: async (t, e, L) => { L.close(); await logout(false); }
@@ -2051,7 +2060,7 @@
         del: async () => {
           const v = await modal({ title: '⚠️ Eliminar cuenta', text: 'Se borrará tu cuenta y <b>todos tus entrenos de la nube</b> para siempre. Los datos de este móvil se mantienen. Escribe <b>ELIMINAR</b> para confirmar.', html: '<input class="input" placeholder="ELIMINAR" style="margin-bottom:16px">', buttons: [{ label: 'Cancelar', value: null }, { label: 'Eliminar', value: 'input', cls: 'danger' }] });
           if (!v || v.trim().toUpperCase() !== 'ELIMINAR') return;
-          try { await Cloud.deleteAccount(); localStorage.removeItem('ib.owner'); closeAll(); toast('Cuenta eliminada'); }
+          try { await Cloud.deleteAccount(); localStorage.removeItem('ib.owner'); S().settings.authSkipped = false; save(); closeAll(); toast('Cuenta eliminada'); openAuth('login', { gate: true }); }
           catch (ex) { toast(ex.message); }
         }
       }
@@ -2064,8 +2073,9 @@
     if (c.user && gateOpen()) { const g = stack.find(l => l.def.id === 'auth'); if (g) g.close(true); S().settings.onboarded = true; save(); renderTab(); }
     // Usa tu nombre de usuario como nombre visible si aún tienes el de por defecto
     if (c.profile && c.profile.username && (!S().settings.name || S().settings.name === 'Atleta')) { S().settings.name = c.profile.username; save(); }
-    if (c.user && Cloud.needsVerify() && !stack.some(l => l.def.id === 'auth')) openVerify(false);
-    else if (c.user && !Cloud.needsVerify() && !c.profile && c.loaded) askUsername();
+    if (c.user && Cloud.needsVerify() && !verifyDismissed && !stack.some(l => l.def.id === 'auth')) openVerify(false);
+    // Solo pide nombre de usuario cuando ya se ha consultado el perfil y de verdad no tiene
+    else if (c.user && !Cloud.needsVerify() && c.profileLoaded && !c.profile) askUsername();
     // Refresca la pantalla si llegaron datos nuevos o cambió el estado de la cuenta
     if (c.pulled && c.pulled !== lastPulled) { lastPulled = c.pulled; if (!stack.some(l => l.def.id === 'aw' || l.def.id === 'we')) refreshTop(); }
     else if (!stack.length && (tab === 'profile' || tab === 'home')) renderTab();
@@ -2128,15 +2138,31 @@
     });
     $('#app').appendChild(b);
   }
+  let swReg = null;
+  // Comprueba si hay versión nueva: 'new' | 'none' | 'error'
+  async function checkForUpdate() {
+    if (!swReg) return 'error';
+    try {
+      await swReg.update();
+      // espera a que termine de instalarse si se ha encontrado una nueva
+      for (let i = 0; i < 40 && swReg.installing; i++) await new Promise(r => setTimeout(r, 250));
+      if (swReg.waiting && navigator.serviceWorker.controller) { showUpdateBanner(swReg.waiting); return 'new'; }
+      return 'none';
+    } catch (e) { return 'error'; }
+  }
   function initSW() {
     if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
-    navigator.serviceWorker.register('sw.js').then(reg => {
+    // updateViaCache 'none': el navegador nunca usa la caché al comprobar si hay versión nueva
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+      swReg = reg;
       const check = () => reg.update().catch(() => { });
-      setInterval(check, 30 * 60e3);
+      setInterval(check, 15 * 60e3);
       document.addEventListener('visibilitychange', () => { if (!document.hidden) check(); });
+      window.addEventListener('online', check);
       const watch = w => w && w.addEventListener('statechange', () => { if (w.state === 'installed' && navigator.serviceWorker.controller) showUpdateBanner(w); });
       if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg.waiting);
       reg.addEventListener('updatefound', () => watch(reg.installing));
+      check(); // comprueba también nada más abrir
     }).catch(() => { });
     let reloading = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; location.reload(); });
@@ -2153,6 +2179,16 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden && stack.some(l => l.def.id === 'aw')) keepAwake(true); });
   // Evitar que la rueda cambie valores en inputs numéricos
   document.addEventListener('wheel', e => { if (document.activeElement && document.activeElement.type === 'number' && document.activeElement === e.target) e.target.blur(); }, { passive: true });
+  // Imágenes: sustituye a los onload/onerror en línea (así la política de seguridad puede prohibir código en el HTML)
+  document.addEventListener('error', e => {
+    const t = e.target; if (!t || t.tagName !== 'IMG') return;
+    if (t.hasAttribute('data-rm-err')) t.remove();
+    else if (t.hasAttribute('data-media')) { const l = t.parentNode && t.parentNode.querySelector('.loading'); if (l) l.textContent = 'Sin conexión: no se pudo cargar la imagen'; }
+  }, true);
+  document.addEventListener('load', e => {
+    const t = e.target; if (!t || t.tagName !== 'IMG' || !t.hasAttribute('data-media')) return;
+    const l = t.parentNode && t.parentNode.querySelector('.loading'); if (l) l.remove();
+  }, true);
   Store.autoSnapshot();
   initSW();
   // Arranque sin saltos: sin sesión guardada, la pantalla de acceso sale al instante;

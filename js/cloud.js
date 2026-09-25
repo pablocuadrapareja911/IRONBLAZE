@@ -5,7 +5,8 @@
 window.Cloud = (function () {
   const cfg = window.FIREBASE_CONFIG;
   const SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
-  const st = { configured: !!(cfg && cfg.apiKey), loaded: false, user: null, profile: null, sync: 'off', lastSync: 0, error: '' };
+  // profileLoaded: ya se ha consultado el perfil en la nube (hasta entonces no se sabe si tiene nombre de usuario)
+  const st = { configured: !!(cfg && cfg.apiKey), loaded: false, user: null, profile: null, profileLoaded: false, sync: 'off', lastSync: 0, error: '' };
   const listeners = new Set();
   let fb, auth, db, timer = null, syncing = false, again = false;
   // La app puede registrar aquí qué hacer si el dispositivo tenía datos de otra cuenta
@@ -63,7 +64,7 @@ window.Cloud = (function () {
     let firstState; const ready = new Promise(r => firstState = r);
     auth.onAuthStateChanged(async u => {
       setTimeout(firstState, 0);
-      st.user = u; st.profile = null;
+      st.user = u; st.profile = null; st.profileLoaded = false;
       // Pista local para saber al abrir la app si hay sesión (sin esperar a Firebase)
       try { if (u) localStorage.setItem('ib.session', u.uid); else localStorage.removeItem('ib.session'); } catch (e) { }
       if (u) emit();
@@ -83,7 +84,8 @@ window.Cloud = (function () {
     try {
       const d = await db.collection('users').doc(st.user.uid).get();
       st.profile = d.exists && d.data().username ? d.data() : null;
-    } catch (e) { st.profile = null; }
+      st.profileLoaded = true;
+    } catch (e) { st.profile = null; st.profileLoaded = false; } // sin conexión: no se pregunta nada
   }
 
   // ---------- Nombre de usuario ----------
@@ -103,7 +105,7 @@ window.Cloud = (function () {
       tx.set(db.collection('users').doc(u.uid), { username: uname, email: u.email || '', provider: provider(u), createdAt: Date.now() }, { merge: true });
     });
     try { await u.updateProfile({ displayName: uname }); } catch (e) { }
-    st.profile = { username: uname, email: u.email || '' };
+    st.profile = { username: uname, email: u.email || '' }; st.profileLoaded = true;
     emit();
     if (canSync()) firstSync();
   }
@@ -217,7 +219,9 @@ window.Cloud = (function () {
           delete meta.hashes[doc.id]; return;
         }
         if (dirty) return; // cambio local pendiente: gana el local y se sube abajo
-        const w = JSON.parse(d.j);
+        let w;
+        try { w = Store.sanitizeWorkout(JSON.parse(d.j)); } catch (e) { return; } // documento dañado: se ignora
+        w.id = doc.id;
         const hh = hash(JSON.stringify(w));
         if (i >= 0) { if (hash(JSON.stringify(S.workouts[i])) !== hh) { S.workouts[i] = w; changed = true; } }
         else { S.workouts.push(w); changed = true; }
@@ -230,7 +234,12 @@ window.Cloud = (function () {
       if (ms.exists) {
         const d = ms.data(), u = d.u ? d.u.toMillis() : 0;
         if (u > meta.metaU) {
-          const r = JSON.parse(d.j);
+          let r;
+          try { r = JSON.parse(d.j); } catch (e) { r = {}; }
+          // Limpia lo que llega de la nube igual que una copia importada
+          const clean = Store.sanitizeState({ workouts: [], routines: r.routines, custom: r.custom, measures: r.measures, settings: Object.assign({}, S.settings, r.settings || {}), createdAt: r.createdAt });
+          r = { routines: clean.routines, custom: clean.custom, measures: clean.measures, settings: {}, createdAt: clean.createdAt };
+          SYNC_SETTINGS.forEach(k => { r.settings[k] = clean.settings[k]; });
           if (localMetaDirty) {
             S.routines = unionById(S.routines, r.routines || []);
             S.custom = unionById(S.custom, r.custom || []);
