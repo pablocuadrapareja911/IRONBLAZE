@@ -582,6 +582,15 @@ h2.section .mini-seg { text-transform: none; letter-spacing: 0; }
 .pw-meter i[data-s="3"], .pw-meter i[data-s="4"] { background: var(--green); }
 .acc-card .ins-ic { font-size: 22px; }
 .modal.center { text-align: center; }
+.screen.still { animation: none; }
+#splash { position: absolute; inset: 0; z-index: 150; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; transition: opacity .3s; }
+#splash.out { opacity: 0; pointer-events: none; }
+#splash .sp-logo { font-size: 64px; filter: drop-shadow(0 0 22px var(--orange-glow)); animation: bounce .8s ease-out; }
+#splash .sp-brand { font-family: var(--display); font-size: 40px; letter-spacing: 1.5px; }
+#splash .sp-brand b { color: var(--orange); font-weight: 400; }
+#splash .sp-bar { width: 120px; height: 3px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 14px; }
+#splash .sp-bar i { display: block; width: 40%; height: 100%; background: var(--orange); border-radius: 3px; animation: spbar 1s ease-in-out infinite; }
+@keyframes spbar { from { transform: translateX(-100%); } to { transform: translateX(300%); } }
 .auth-logo { font-size: 54px; line-height: 1; margin: 6px 0 4px; filter: drop-shadow(0 0 18px var(--orange-glow)); }
 
 /* ---------- Foto de perfil ---------- */
