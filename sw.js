@@ -1,6 +1,6 @@
 // IRONBLAZE service worker: app sin conexión, caché de animaciones, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.4.1';
+const VERSION = '1.4.2';
 const APP = 'ironblaze-app-' + VERSION;
 const MEDIA = 'ironblaze-media-v1';
 const SHELL = ['./', 'index.html', 'css/styles.css', 'js/exercises-data.js', 'js/hd-images.js', 'js/es-content.js', 'js/i18n.js',
