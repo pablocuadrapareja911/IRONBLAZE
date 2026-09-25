@@ -1,10 +1,10 @@
 // IRONBLAZE service worker: app sin conexión, caché de animaciones, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.4.0';
+const VERSION = '1.4.1';
 const APP = 'ironblaze-app-' + VERSION;
 const MEDIA = 'ironblaze-media-v1';
 const SHELL = ['./', 'index.html', 'css/styles.css', 'js/exercises-data.js', 'js/hd-images.js', 'js/es-content.js', 'js/i18n.js',
-  'js/store.js', 'js/bodymap.js', 'js/firebase-config.js', 'js/cloud.js', 'js/charts.js', 'js/app.js', 'icon.svg', 'manifest.webmanifest', 'privacy.html'];
+  'js/store.js', 'js/bodymap.js', 'js/firebase-config.js', 'js/cloud.js', 'js/charts.js', 'js/app.js', 'icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'manifest.webmanifest', 'privacy.html'];
 
 self.addEventListener('install', e => {
   // No se activa solo: espera a que el usuario pulse "Actualizar" (salvo la primera instalación)

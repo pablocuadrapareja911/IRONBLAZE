@@ -1,14 +1,22 @@
 {
+  "id": "/IRONBLAZE/",
   "name": "IRONBLAZE · Gym Tracker",
   "short_name": "IRONBLAZE",
-  "description": "Registra tus entrenamientos, rutinas y récords. 1500+ ejercicios con animación.",
+  "description": "Registra tus entrenamientos, rutinas y récords. 1500+ ejercicios con animación, superseries, mapa muscular y sincronización en la nube.",
+  "lang": "es",
+  "dir": "ltr",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0a0a0a",
   "theme_color": "#0a0a0a",
+  "categories": ["health", "fitness", "sports", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
-    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
