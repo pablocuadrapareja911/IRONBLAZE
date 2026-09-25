@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.2.0';
+  const VERSION = '1.4.0';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -65,10 +65,18 @@
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => { });
 
   let saveTimer = null;
-  function save(now) {
+  function save(now, fromCloud) {
     clearTimeout(saveTimer);
     const run = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { console.warn('No se pudo guardar', e); } };
     if (now) run(); else saveTimer = setTimeout(run, 150);
+    // Programa la subida a la nube (si hay cuenta). El entreno en curso no se sube hasta terminarlo.
+    if (!fromCloud && window.Cloud) window.Cloud.schedule();
+  }
+  // Vacía los datos de entrenamiento (al entrar con otra cuenta en este dispositivo)
+  function replaceWithEmpty() {
+    const d = defaults();
+    state.workouts = []; state.routines = []; state.custom = []; state.measures = []; state.active = null; state.createdAt = d.createdAt;
+    indexExercises(); save(true, true);
   }
   window.addEventListener('beforeunload', () => save(true));
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(true); });
@@ -297,7 +305,7 @@
     save, uid, GIF, HD, getEx, allExercises, kind, indexExercises, bodyweight,
     toDisplay, fromDisplay, unit, e1rm, workoutStats, exerciseHistory, previousSets,
     records, setPR, workoutPRs, streakWeeks, weekKey, PROGRAMS, VERSION,
-    autoSnapshot, snapshots, restoreSnapshot, importData,
+    autoSnapshot, snapshots, restoreSnapshot, importData, replaceWithEmpty,
     reset() { state = defaults(); indexExercises(); save(true); }
   };
 })();

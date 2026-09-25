@@ -54,8 +54,15 @@
     bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 21h4"/>',
     share: '<circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="m8.2 10.8 7.6-4.4M8.2 13.2l7.6 4.4"/>',
     scale: '<path d="M5 20h14l-2-12H7zM9 8a3 3 0 0 1 6 0"/>',
-    bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.6 1 2.5h6c0-.9.2-1.7 1-2.5A6 6 0 0 0 12 3z"/>'
+    bulb: '<path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.6 1 2.5h6c0-.9.2-1.7 1-2.5A6 6 0 0 0 12 3z"/>',
+    cloud: '<path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 10 4 4 0 0 1 18 18z"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+    lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+    logout: '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+    at: '<circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1"/>'
   };
+  const GOOGLE_SVG = '<svg viewBox="0 0 48 48" width="20" height="20"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
+  const FACEBOOK_SVG = '<svg viewBox="0 0 24 24" width="20" height="20"><path fill="#fff" d="M24 12a12 12 0 1 0-13.9 11.9v-8.4H7.1V12h3V9.4c0-3 1.8-4.7 4.5-4.7 1.3 0 2.7.2 2.7.2v3h-1.5c-1.5 0-2 .9-2 1.9V12h3.4l-.5 3.5h-2.9v8.4A12 12 0 0 0 24 12z"/></svg>';
   const ic = (n, cls = 'ico') => `<svg class="${cls}" viewBox="0 0 24 24">${P[n]}</svg>`;
 
   // ---------------- Formatos ----------------
@@ -108,6 +115,66 @@
     return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" onerror="this.remove()"></div>`;
   }
   const exSub = ex => `${tr('bodyParts', ex.b[0])} · ${tr('equipment', ex.q[0])}`;
+
+  // ---------------- Foto de perfil ----------------
+  const AV_PRESETS = ['🔥', '💪', '🏋️', '🦁', '🐺', '🐉', '⚡', '🥊', '🦾', '🏃', '🐯', '👑'];
+  const AV_COLORS = ['linear-gradient(135deg,#ff6a00,#b33c00)', 'linear-gradient(135deg,#2b2b2b,#0a0a0a)', 'linear-gradient(135deg,#ffc233,#ff6a00)',
+    'linear-gradient(135deg,#4da3ff,#1f4fa8)', 'linear-gradient(135deg,#2fd67b,#127a43)', 'linear-gradient(135deg,#c77dff,#6a2bb3)'];
+  function avatarHTML(cls = '') {
+    const a = S().settings.avatar, name = S().settings.name || '?';
+    if (a && a.type === 'img' && a.data) return `<div class="avatar ${cls} has-img"><img src="${a.data}" alt=""></div>`;
+    if (a && a.type === 'preset') return `<div class="avatar ${cls} preset" style="background:${AV_COLORS[a.c % AV_COLORS.length]}">${a.e}</div>`;
+    return `<div class="avatar ${cls}">${esc(name.charAt(0).toUpperCase())}</div>`;
+  }
+  // Recorta al centro y reduce a 256 px para que ocupe poco (se guarda y se sincroniza)
+  function imageToAvatar(file) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const side = Math.min(img.width, img.height), c = document.createElement('canvas');
+        c.width = c.height = 256;
+        c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
+        URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.82));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen')); };
+      img.src = url;
+    });
+  }
+  function openAvatarPicker() {
+    const gPhoto = Cloud.st.user && Cloud.st.user.photoURL;
+    const setAv = v => { S().settings.avatar = v; save(); refreshTop(); };
+    openLayer({
+      transient: true, data: { color: 0 },
+      html: L => `<div class="backdrop" data-act="x"></div><div class="sheet"><div class="grab"></div><h3>Foto de perfil</h3>
+        <div class="center" style="margin-bottom:14px;display:flex;justify-content:center">${avatarHTML('lg')}</div>
+        <button class="sheet-opt" data-act="gallery">${ic('upload')}<span>Elegir de la galería<span class="sub">O hacer una foto con la cámara</span></span></button>
+        ${gPhoto ? `<button class="sheet-opt" data-act="google">${GOOGLE_SVG}<span>Usar mi foto de Google</span></button>` : ''}
+        <div style="margin:14px 0 8px;color:var(--muted);font-size:13px">O elige un avatar (primero el color):</div>
+        <div class="av-colors">${AV_COLORS.map((c, i) => `<button class="av-color ${L.data.color === i ? 'on' : ''}" style="background:${c}" data-act="color" data-i="${i}"></button>`).join('')}</div>
+        <div class="av-grid">${AV_PRESETS.map(e => `<button class="avatar preset" style="background:${AV_COLORS[L.data.color]}" data-act="preset" data-e="${e}">${e}</button>`).join('')}</div>
+        ${S().settings.avatar ? `<button class="sheet-opt danger" data-act="remove">${ic('trash')}<span>Quitar foto</span></button>` : ''}
+        <input type="file" accept="image/*" class="hidden" id="av-file"></div>`,
+      bind: (el, L) => {
+        el.querySelector('#av-file').addEventListener('change', async e => {
+          const f = e.target.files[0]; if (!f) return;
+          try { const data = await imageToAvatar(f); L.close(); setAv({ type: 'img', data }); toast('✅ Foto actualizada'); }
+          catch (err) { toast(err.message); }
+        });
+      },
+      actions: {
+        x: (t, e, L) => L.close(),
+        gallery: (t, e, L) => L.el.querySelector('#av-file').click(),
+        google: async (t, e, L) => {
+          let data = gPhoto;
+          try { const b = await (await fetch(gPhoto.replace(/=s\d+-c$/, '=s256-c'))).blob(); data = await imageToAvatar(b); } catch (err) { }
+          L.close(); setAv({ type: 'img', data }); toast('✅ Foto actualizada');
+        },
+        color: (t, e, L) => { L.data.color = +t.dataset.i; L.render(); },
+        preset: (t, e, L) => { L.close(); setAv({ type: 'preset', e: t.dataset.e, c: L.data.color }); toast('✅ Avatar actualizado'); },
+        remove: (t, e, L) => { L.close(); setAv(null); }
+      }
+    });
+  }
 
   // Superseries: letra y color por grupo, en orden de aparición
   const SS_COLORS = ['#4da3ff', '#2fd67b', '#c77dff', '#ffc233', '#ff5c8a'];
@@ -408,7 +475,7 @@
     const st = Store.workoutStats(w), prs = Store.workoutPRs(w), name = S().settings.name;
     const exs = w.exercises.filter(e => e.sets.some(s => s.done));
     return `<div class="card tap wcard" data-act="openW" data-id="${w.id}">
-      <div class="wc-head"><div class="avatar">${esc(name.charAt(0).toUpperCase())}</div>
+      <div class="wc-head">${avatarHTML()}
         <div style="flex:1"><div class="wc-name">${esc(name)}</div><div class="wc-date">${fmtDate(w.start, true)}</div></div>
         ${prs.length ? `<span class="pr-pill">🏆 ${prs.length} PR</span>` : ''}</div>
       <h4>${esc(w.title)}</h4>
@@ -1357,7 +1424,7 @@
         const prSet = new Set(prs.map(p => p.exId)), ssm = ssMap(w.exercises);
         return `<div class="screen"><div class="page">
           <div class="page-head"><button class="icon-btn ghost back-btn" data-act="back">${ic('back')}</button><h1 style="font-size:18px">Detalle</h1><button class="icon-btn ghost" data-act="menu">${ic('more')}</button></div>
-          <div class="row-flex"><div class="avatar">${esc(S().settings.name.charAt(0).toUpperCase())}</div><div><b>${esc(S().settings.name)}</b><div class="muted" style="font-size:12px">${fmtDate(w.start, true)}</div></div></div>
+          <div class="row-flex">${avatarHTML()}<div><b>${esc(S().settings.name)}</b><div class="muted" style="font-size:12px">${fmtDate(w.start, true)}</div></div></div>
           <h2 style="font-size:24px;margin:16px 0 12px">${esc(w.title)}</h2>
           <div class="wc-stats"><div>Duración<b>${fmtDur(st.duration)}</b></div><div>Volumen<b>${fmtVol(st.volume)}</b></div><div>Series<b>${st.sets}</b></div><div>Récords<b>${prs.length}</b></div></div>
           ${w.notes ? `<div class="card mt" style="color:var(--text-2);white-space:pre-wrap">${esc(w.notes)}</div>` : ''}
@@ -1439,10 +1506,11 @@
 
     view.innerHTML = `<div class="page">
       <div class="page-head"><h1>Perfil</h1><div class="h-actions"><button class="icon-btn" data-act="settings">${ic('gear')}</button></div></div>
-      <div class="row-flex"><div class="avatar lg">${esc(st.settings.name.charAt(0).toUpperCase())}</div>
+      <div class="row-flex"><div class="avatar-wrap" data-act="photo">${avatarHTML('lg')}<span class="avatar-edit">${ic('edit')}</span></div>
         <div style="flex:1"><div style="font-size:21px;font-weight:800;cursor:pointer" data-act="rename">${esc(st.settings.name)} <span class="muted" style="font-size:13px">${ic('edit')}</span></div>
           <div class="muted" style="font-size:13px">Miembro desde ${new Date(st.createdAt).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</div>
           <div class="bw-chip" data-act="bw">${ic('scale')} ${bw ? fmtW(bw) : 'Añade tu peso corporal'}</div></div></div>
+      ${accountCard()}
       <div class="stats-row">
         <div class="stat"><div class="v">${ws.length}</div><div class="l">Entrenos</div></div>
         <div class="stat"><div class="v">${Store.streakWeeks()}<small>sem</small></div><div class="l">Racha 🔥</div></div>
@@ -1482,6 +1550,7 @@
           ${Array.from({ length: first }, () => '<div></div>').join('')}
           ${Array.from({ length: daysIn }, (_, i) => { const k = new Date(base.getFullYear(), base.getMonth(), i + 1).getTime(); const on = dayMap[k]; return `<div class="c ${on ? 'on' : ''} ${k === today ? 'today' : ''}" ${on ? `data-act="day" data-id="${on[0]}"` : ''}>${i + 1}</div>`; }).join('')}</div>
       </div>
+      ${Cloud.st.user ? `<button class="btn danger block mt" data-act="logout">${ic('logout')} Cerrar sesión</button>` : ''}
       <div class="muted center mt" style="font-size:12px;padding:10px 0">IRONBLAZE · Volumen total levantado: <b style="color:var(--orange)">${fmtVol(tot.v)}</b></div>
     </div>`;
     Charts.bar($('#wchart'), wdata);
@@ -1494,7 +1563,8 @@
       calNext: () => { if (calOffset < 0) { calOffset++; renderProfile(); } },
       day: t => openWorkoutDetail(t.dataset.id),
       rename: async () => { const n = await promptM('Tu nombre', S().settings.name); if (n && n.trim()) { S().settings.name = n.trim(); save(); renderProfile(); } },
-      bw: async () => { if (await askBodyweight()) renderProfile(); }
+      bw: async () => { if (await askBodyweight()) renderProfile(); },
+      login: () => openAuth('login'), signup: () => openAuth('signup'), account: openAccount, photo: openAvatarPicker, logout: confirmLogout
     };
   }
   async function askBodyweight() {
@@ -1653,6 +1723,7 @@
         const notifState = !('Notification' in window) ? 'No disponible en este navegador' : Notification.permission === 'denied' ? 'Bloqueadas: actívalas en los ajustes del navegador' : 'Te avisa aunque tengas la pantalla bloqueada';
         return `<div class="screen"><div class="page">
           <div class="page-head"><button class="icon-btn ghost back-btn" data-act="back">${ic('back')}</button><h1>Ajustes</h1></div>
+          ${Cloud.st.configured ? `<h2 class="section">Cuenta</h2>${accountCard(true)}${Cloud.st.user ? `<button class="sheet-opt danger" data-act="logout">${ic('logout')}<span>Cerrar sesión</span></button>` : ''}` : ''}
           <h2 class="section">Perfil</h2>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Nombre</div><div class="sr-sub">${esc(s.name)}</div></div><button class="btn sm" data-act="name">Editar</button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Peso corporal</div><div class="sr-sub">${Store.bodyweight() ? fmtW(Store.bodyweight()) + ' · se usa para el volumen de dominadas, fondos…' : 'Para calcular el volumen en ejercicios con tu propio peso'}</div></div><button class="btn sm" data-act="bw">Editar</button></div>
@@ -1695,6 +1766,7 @@
       },
       actions: {
         back: (t, e, L) => L.close(),
+        login: () => openAuth('login'), signup: () => openAuth('signup'), account: () => openAccount(), logout: confirmLogout,
         name: async (t, e, L) => { const n = await promptM('Tu nombre', S().settings.name); if (n && n.trim()) { S().settings.name = n.trim(); save(); L.render(); } },
         bw: async (t, e, L) => { if (await askBodyweight()) L.render(); },
         goal: (t, e, L) => { S().settings.weekGoal = Math.max(1, Math.min(7, S().settings.weekGoal + +t.dataset.d)); save(); L.render(); },
@@ -1737,7 +1809,7 @@
   async function onboarding() {
     const st = S();
     if (st.settings.onboarded) return;
-    if (st.workouts.length) { st.settings.onboarded = true; save(); return; }
+    if (st.workouts.length || Cloud.st.user) { st.settings.onboarded = true; save(); return; }
     const v = await modal({
       title: '🔥 Bienvenido a IRONBLAZE', noFocus: true,
       text: 'Cuéntanos un poco de ti para personalizar la app. Podrás cambiarlo cuando quieras en Ajustes.',
@@ -1757,6 +1829,246 @@
     }
     save(); renderTab();
   }
+
+  // Al abrir la app: si hay cuentas y no has entrado ni elegido "sin cuenta", muestra la pantalla de acceso
+  function startup() {
+    const c = Cloud.st;
+    if (c.configured && c.loaded && !c.user && !S().settings.authSkipped) openAuth('login', { gate: true });
+    else onboarding();
+  }
+  async function confirmLogout() {
+    const v = await modal({ title: '¿Cerrar sesión?', text: 'Tus datos siguen guardados en la nube. ¿Quieres borrarlos también de este dispositivo?', buttons: [{ label: 'Cerrar sesión y mantener datos aquí', value: 'keep', cls: 'primary' }, { label: 'Cerrar sesión y borrar de este móvil', value: 'wipe', cls: 'danger' }, { label: 'Cancelar', value: null }] });
+    if (v) await logout(v === 'wipe');
+  }
+  async function logout(wipe) {
+    if (Cloud.canSync()) { try { await Cloud.sync(); } catch (e) { } }
+    await Cloud.signOut();
+    if (wipe) { Store.replaceWithEmpty(); localStorage.removeItem('ib.owner'); }
+    S().settings.authSkipped = false; save();
+    closeAll(); toast('Sesión cerrada');
+    openAuth('login', { gate: true });
+  }
+
+  // =====================================================================
+  //  CUENTAS: registro, inicio de sesión, verificación y sincronización
+  // =====================================================================
+  function timeAgo(ts) {
+    if (!ts) return 'nunca';
+    const s = Math.round((Date.now() - ts) / 1000);
+    return s < 60 ? 'hace un momento' : s < 3600 ? `hace ${Math.round(s / 60)} min` : s < 86400 ? `hace ${Math.round(s / 3600)} h` : fmtDate(ts);
+  }
+  function syncLabel() {
+    const c = Cloud.st;
+    if (Cloud.needsVerify()) return '<span style="color:var(--yellow)">✉️ Verifica tu correo para sincronizar</span>';
+    if (c.sync === 'syncing') return '☁️ Sincronizando…';
+    if (c.sync === 'error') return `<span style="color:var(--red)">⚠️ ${esc(c.error)}</span>`;
+    return `☁️ Sincronizado ${timeAgo(c.lastSync)}`;
+  }
+  function accountCard(inSettings) {
+    const c = Cloud.st;
+    if (!c.configured) return '';
+    if (!c.user) return `<div class="card mt acc-card"><div class="row-flex"><span class="ins-ic">☁️</span><div style="flex:1"><b>Guarda tus entrenos en la nube</b><div class="muted" style="font-size:13px">Crea una cuenta gratis y recupera todo en cualquier móvil.</div></div></div>
+      <div class="quick-grid mt-s"><button class="btn primary sm" data-act="signup">Crear cuenta</button><button class="btn sm" data-act="login">Iniciar sesión</button></div></div>`;
+    const name = c.profile ? '@' + c.profile.username : (c.user.displayName || c.user.email || 'Tu cuenta');
+    return `<div class="card ${inSettings ? '' : 'mt'} tap acc-card" data-act="account"><div class="row-flex">${avatarHTML('sm')}
+      <div style="flex:1;min-width:0"><b>${esc(name)}</b><div class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${syncLabel()}</div></div>${ic('chevR')}</div></div>`;
+  }
+
+  function openAuth(mode = 'login', opts = {}) {
+    if (!Cloud.st.configured) { toast('Las cuentas aún no están activadas'); return; }
+    if (!Cloud.st.loaded) { toast(Cloud.st.error || 'Conectando con el servicio de cuentas… prueba en unos segundos'); return; }
+    const f = { username: '', email: '', password: '', password2: '' };
+    let busy = false;
+    const L = openLayer({
+      id: 'auth', data: { mode, gate: !!opts.gate },
+      html: L => {
+        const m = L.data.mode;
+        return `<div class="screen up"><div class="page auth-page">
+          <div class="page-head">${L.data.gate ? '<h1></h1>' : `<button class="icon-btn ghost back-btn" data-act="close">${ic('close')}</button><h1></h1>`}</div>
+          <div class="center">${L.data.gate ? '<div class="auth-logo">🔥</div>' : ''}<div class="brand" style="font-size:40px">IRON<b>BLAZE</b></div>
+            <p class="muted" style="margin:4px 0 22px">${m === 'signup' ? 'Crea tu cuenta y guarda tu progreso en la nube' : m === 'reset' ? 'Te enviaremos un correo para crear una contraseña nueva' : 'Bienvenido de nuevo 💪'}</p></div>
+          ${m !== 'reset' ? `
+          <button class="btn block social google" data-act="google">${GOOGLE_SVG} Continuar con Google</button>
+          ${window.AUTH_FACEBOOK ? `<button class="btn block social facebook mt-s" data-act="facebook">${FACEBOOK_SVG} Continuar con Facebook</button>` : ''}
+          <div class="or"><span>o con tu correo</span></div>` : ''}
+          ${m === 'signup' ? `<div class="field"><label>Nombre de usuario</label><div class="input-ic">${ic('at')}<input class="input" data-f="username" autocomplete="username" autocapitalize="none" placeholder="ej: pablo_fit" value="${esc(f.username)}"></div><div class="hint" data-hint="username">3-20 caracteres: letras, números, "_" o "."</div></div>` : ''}
+          <div class="field"><label>Correo electrónico</label><div class="input-ic">${ic('mail')}<input class="input" data-f="email" type="email" autocomplete="email" autocapitalize="none" placeholder="tu@correo.com" value="${esc(f.email)}"></div></div>
+          ${m !== 'reset' ? `<div class="field"><label>Contraseña</label><div class="input-ic">${ic('lock')}<input class="input" data-f="password" type="password" autocomplete="${m === 'signup' ? 'new-password' : 'current-password'}" placeholder="${m === 'signup' ? 'Mínimo 8 caracteres' : 'Tu contraseña'}"></div>
+            ${m === 'signup' ? '<div class="pw-meter"><i></i></div>' : `<div class="hint" style="text-align:right"><span class="link" data-act="goReset">¿Has olvidado tu contraseña?</span></div>`}</div>` : ''}
+          ${m === 'signup' ? `<div class="field"><label>Repite la contraseña</label><div class="input-ic">${ic('lock')}<input class="input" data-f="password2" type="password" autocomplete="new-password" placeholder="Repite la contraseña"></div></div>` : ''}
+          <div class="auth-err hidden"></div>
+          <button class="btn primary block mt" style="height:52px" data-act="submit">${m === 'signup' ? 'Crear cuenta' : m === 'reset' ? 'Enviar correo' : 'Iniciar sesión'}</button>
+          <p class="center muted mt" style="font-size:14px">${m === 'signup' ? '¿Ya tienes cuenta? <span class="link" data-act="goLogin">Inicia sesión</span>' : m === 'reset' ? '<span class="link" data-act="goLogin">Volver a iniciar sesión</span>' : '¿No tienes cuenta? <span class="link" data-act="goSignup">Créala gratis</span>'}</p>
+          ${m === 'signup' ? '<p class="center muted" style="font-size:11px;line-height:1.5">Al crear la cuenta aceptas la <a class="link" href="privacy.html" target="_blank">política de privacidad</a>. Tus entrenos se guardan cifrados en Google Firebase.</p>' : ''}
+          ${L.data.gate ? '<div class="or"><span>o</span></div><button class="btn outline block" data-act="skip">Continuar sin cuenta</button><p class="center muted" style="font-size:12px;margin-top:8px">Tus entrenos se guardarán solo en este móvil. Podrás crear la cuenta más tarde desde Perfil.</p>' : ''}
+        </div></div>`;
+      },
+      onInput: (e, L) => {
+        const k = e.target.dataset.f; if (!k) return;
+        f[k] = e.target.value;
+        if (k === 'password' && L.data.mode === 'signup') {
+          const p = f.password; let sc = 0;
+          if (p.length >= 8) sc++; if (/[A-Z]/.test(p) && /[a-z]/.test(p)) sc++; if (/\d/.test(p)) sc++; if (/[^A-Za-z0-9]/.test(p) || p.length >= 12) sc++;
+          const bar = L.el.querySelector('.pw-meter i'); bar.style.width = (sc * 25) + '%'; bar.dataset.s = sc;
+        }
+        if (k === 'username') {
+          const h = L.el.querySelector('[data-hint="username"]'), u = f.username.trim();
+          h.className = 'hint'; h.textContent = '3-20 caracteres: letras, números, "_" o "."';
+          clearTimeout(L.data.ut);
+          if (u && !Cloud.validUsername(u)) { h.className = 'hint bad'; h.textContent = 'Solo letras, números, "_" o "." (3-20)'; return; }
+          if (u) L.data.ut = setTimeout(async () => {
+            try { const free = await Cloud.usernameFree(u); if (f.username.trim() !== u) return; h.className = 'hint ' + (free ? 'ok' : 'bad'); h.textContent = free ? '✓ Disponible' : '✗ Ya está cogido'; } catch (err) { }
+          }, 450);
+        }
+      },
+      actions: {
+        close: (t, e, L) => L.close(),
+        skip: (t, e, L) => { S().settings.authSkipped = true; save(); L.close(); onboarding(); },
+        goLogin: (t, e, L) => { L.data.mode = 'login'; L.render(); },
+        goSignup: (t, e, L) => { L.data.mode = 'signup'; L.render(); },
+        goReset: (t, e, L) => { L.data.mode = 'reset'; L.render(); },
+        google: (t, e, L) => socialLogin('google', L),
+        facebook: (t, e, L) => socialLogin('facebook', L),
+        submit: async (t, e, L) => {
+          if (busy) return;
+          const m = L.data.mode, err = L.el.querySelector('.auth-err');
+          const fail = msg => { err.textContent = msg; err.classList.remove('hidden'); busy = false; t.disabled = false; t.textContent = m === 'signup' ? 'Crear cuenta' : m === 'reset' ? 'Enviar correo' : 'Iniciar sesión'; };
+          err.classList.add('hidden');
+          if (!/^\S+@\S+\.\S+$/.test(f.email.trim())) return fail('Escribe un correo válido.');
+          if (m === 'signup') {
+            if (!Cloud.validUsername(f.username.trim())) return fail('El nombre de usuario debe tener 3-20 caracteres: letras, números, "_" o ".".');
+            if (f.password.length < 8) return fail('La contraseña debe tener al menos 8 caracteres.');
+            if (f.password !== f.password2) return fail('Las contraseñas no coinciden.');
+          }
+          if (m === 'login' && !f.password) return fail('Escribe tu contraseña.');
+          busy = true; t.disabled = true; t.textContent = 'Un momento…';
+          try {
+            if (m === 'signup') { await Cloud.signUp(f); S().settings.onboarded = true; save(); L.close(); openVerify(true); }
+            else if (m === 'reset') { await Cloud.resetPassword(f.email); toast('📧 Te hemos enviado un correo para cambiar la contraseña'); L.data.mode = 'login'; busy = false; L.render(); }
+            else { await Cloud.signIn(f.email, f.password); S().settings.onboarded = true; save(); L.close(); toast('✅ Sesión iniciada'); }
+          } catch (ex) { fail(ex.message); }
+        }
+      }
+    });
+    return L;
+  }
+  async function socialLogin(kind, L) {
+    const err = L.el.querySelector('.auth-err'); err.classList.add('hidden');
+    try { await Cloud.social(kind); if (Cloud.st.user) { S().settings.onboarded = true; save(); L.close(); toast('✅ Sesión iniciada'); } }
+    catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); }
+  }
+
+  let verifyOpen = false;
+  function openVerify(justCreated) {
+    if (verifyOpen || !Cloud.st.user) return;
+    verifyOpen = true;
+    openLayer({
+      id: 'verify', transient: true,
+      html: () => `<div class="backdrop"></div><div class="modal center">
+        <div style="font-size:54px">📧</div>
+        <h3>${justCreated ? '¡Cuenta creada! Verifica tu correo' : 'Verifica tu correo'}</h3>
+        <p>Te hemos enviado un enlace a <b style="color:var(--text)">${esc(Cloud.st.user.email)}</b>. Ábrelo para activar tu cuenta y vuelve aquí. Si no lo ves, mira en <b>spam</b>.</p>
+        <div class="auth-err hidden"></div>
+        <button class="btn primary block" data-act="check">Ya lo he verificado</button>
+        <button class="btn block mt-s" data-act="resend">Reenviar correo</button>
+        <div class="row-flex mt-s"><button class="btn sm block" data-act="later">Más tarde</button><button class="btn sm danger block" data-act="out">Cerrar sesión</button></div>
+      </div>`,
+      actions: {
+        check: async (t, e, L) => {
+          t.textContent = 'Comprobando…';
+          const ok = await Cloud.reloadUser();
+          if (ok) { L.close(); toast('✅ ¡Correo verificado! Tus entrenos se sincronizarán'); }
+          else { t.textContent = 'Ya lo he verificado'; const er = L.el.querySelector('.auth-err'); er.textContent = 'Todavía no aparece verificado. Pulsa el enlace del correo y vuelve a intentarlo.'; er.classList.remove('hidden'); }
+        },
+        resend: async (t) => { try { await Cloud.resendVerification(); toast('📧 Correo reenviado'); t.disabled = true; setTimeout(() => t.disabled = false, 30000); } catch (ex) { toast(ex.message); } },
+        later: (t, e, L) => L.close(),
+        out: async (t, e, L) => { L.close(); await logout(false); }
+      },
+      onClose: () => { verifyOpen = false; }
+    });
+  }
+
+  let usernameOpen = false;
+  function askUsername() {
+    if (usernameOpen) return;
+    usernameOpen = true;
+    const sug = ((Cloud.st.user.displayName || (Cloud.st.user.email || '').split('@')[0] || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9_.]/g, '').slice(0, 16)) || 'atleta';
+    openLayer({
+      id: 'uname', transient: true,
+      html: () => `<div class="backdrop"></div><div class="modal">
+        <h3>Elige tu nombre de usuario</h3><p>Así te verán en IRONBLAZE. Puede tener letras, números, "_" o ".".</p>
+        <div class="input-ic">${ic('at')}<input class="input" data-f="u" autocapitalize="none" value="${esc(sug)}"></div>
+        <div class="hint" data-hint>3-20 caracteres</div>
+        <div class="auth-err hidden"></div>
+        <button class="btn primary block mt" data-act="ok">Guardar</button>
+        <button class="btn block mt-s" data-act="out">Cerrar sesión</button></div>`,
+      actions: {
+        ok: async (t, e, L) => {
+          const v = L.el.querySelector('[data-f="u"]').value.trim(), er = L.el.querySelector('.auth-err');
+          t.disabled = true;
+          try { await Cloud.claimUsername(v); L.close(); toast(`✅ ¡Hola, @${esc(v)}!`); }
+          catch (ex) { er.textContent = ex.message; er.classList.remove('hidden'); t.disabled = false; }
+        },
+        out: async (t, e, L) => { L.close(); await logout(false); }
+      },
+      onClose: () => { usernameOpen = false; }
+    });
+  }
+
+  function openAccount() {
+    const c = Cloud.st; if (!c.user) { openAuth('login'); return; }
+    const provName = { 'password': 'Correo y contraseña', 'google.com': 'Google', 'facebook.com': 'Facebook' }[Cloud.provider()] || Cloud.provider();
+    openLayer({
+      id: 'account',
+      html: () => `<div class="screen"><div class="page">
+        <div class="page-head"><button class="icon-btn ghost back-btn" data-act="back">${ic('back')}</button><h1>Tu cuenta</h1></div>
+        <div class="center"><div class="avatar-wrap" data-act="photo" style="margin:6px auto 10px">${avatarHTML('lg')}<span class="avatar-edit">${ic('edit')}</span></div>
+          <div style="font-size:21px;font-weight:800">${c.profile ? '@' + esc(c.profile.username) : ''}</div>
+          <div class="muted" style="font-size:14px">${esc(c.user.email || '')}</div>
+          <div class="tag mt-s" style="display:inline-block">${provName}</div></div>
+        <div class="card mt"><div class="row-flex"><span class="ins-ic">☁️</span><div style="flex:1"><b>Sincronización</b><div class="muted" style="font-size:13px">${syncLabel()}</div></div>
+          <button class="btn sm" data-act="sync" ${Cloud.canSync() ? '' : 'disabled'}>Sincronizar</button></div>
+          <div class="muted" style="font-size:12px;margin-top:8px">Tus entrenos, rutinas, medidas y ajustes se guardan en la nube automáticamente. Entra con esta cuenta en otro móvil para recuperarlo todo.</div></div>
+        ${Cloud.needsVerify() ? `<button class="btn primary block mt" data-act="verify">✉️ Verificar mi correo</button>` : ''}
+        ${Cloud.provider() === 'password' ? `<button class="sheet-opt" data-act="pass">${ic('lock')}<span>Cambiar contraseña<span class="sub">Te enviamos un correo para elegir una nueva</span></span></button>` : ''}
+        <button class="sheet-opt" data-act="logout">${ic('logout')}<span>Cerrar sesión</span></button>
+        <button class="sheet-opt danger" data-act="del">${ic('trash')}<span>Eliminar cuenta<span class="sub">Borra tu cuenta y todos tus datos de la nube</span></span></button>
+      </div></div>`,
+      actions: {
+        back: (t, e, L) => L.close(),
+        sync: async (t, e, L) => { await Cloud.sync(); L.render(); toast(Cloud.st.sync === 'ok' ? '☁️ Todo sincronizado' : Cloud.st.error); },
+        verify: () => openVerify(false),
+        pass: async () => { try { await Cloud.resetPassword(c.user.email); toast('📧 Revisa tu correo para cambiar la contraseña'); } catch (ex) { toast(ex.message); } },
+        logout: confirmLogout,
+        photo: openAvatarPicker,
+        del: async () => {
+          const v = await modal({ title: '⚠️ Eliminar cuenta', text: 'Se borrará tu cuenta y <b>todos tus entrenos de la nube</b> para siempre. Los datos de este móvil se mantienen. Escribe <b>ELIMINAR</b> para confirmar.', html: '<input class="input" placeholder="ELIMINAR" style="margin-bottom:16px">', buttons: [{ label: 'Cancelar', value: null }, { label: 'Eliminar', value: 'input', cls: 'danger' }] });
+          if (!v || v.trim().toUpperCase() !== 'ELIMINAR') return;
+          try { await Cloud.deleteAccount(); localStorage.removeItem('ib.owner'); closeAll(); toast('Cuenta eliminada'); }
+          catch (ex) { toast(ex.message); }
+        }
+      }
+    });
+  }
+
+  // Reacciona a los cambios de sesión / sincronización
+  let lastPulled = 0;
+  Cloud.onChange(c => {
+    // Usa tu nombre de usuario como nombre visible si aún tienes el de por defecto
+    if (c.profile && c.profile.username && (!S().settings.name || S().settings.name === 'Atleta')) { S().settings.name = c.profile.username; save(); }
+    if (c.user && Cloud.needsVerify() && !stack.some(l => l.def.id === 'auth')) openVerify(false);
+    else if (c.user && !Cloud.needsVerify() && !c.profile && c.loaded) askUsername();
+    // Refresca la pantalla si llegaron datos nuevos o cambió el estado de la cuenta
+    if (c.pulled && c.pulled !== lastPulled) { lastPulled = c.pulled; if (!stack.some(l => l.def.id === 'aw' || l.def.id === 'we')) refreshTop(); }
+    else if (!stack.length && (tab === 'profile' || tab === 'home')) renderTab();
+    else { const acc = stack.find(l => l.def.id === 'account'); if (acc) acc.render(); }
+    document.querySelectorAll('[data-sync-label]').forEach(e => e.innerHTML = syncLabel());
+  });
+  Cloud.setConflictHandler(() => modal({
+    title: 'Este móvil tiene datos de otra cuenta',
+    text: '¿Quieres añadir los entrenos que hay en este dispositivo a tu cuenta, o usar solo los de tu cuenta?',
+    buttons: [{ label: 'Usar solo los de mi cuenta', value: 'replace', cls: 'primary' }, { label: 'Combinar ambos', value: 'merge' }]
+  }).then(v => v || 'replace'));
 
   // ---------------- Datos de ejemplo ----------------
   function seedDemo() {
@@ -1835,5 +2147,5 @@
   document.addEventListener('wheel', e => { if (document.activeElement && document.activeElement.type === 'number' && document.activeElement === e.target) e.target.blur(); }, { passive: true });
   Store.autoSnapshot();
   initSW();
-  setTimeout(onboarding, 400);
+  Cloud.init().finally(() => setTimeout(startup, 200));
 })();
