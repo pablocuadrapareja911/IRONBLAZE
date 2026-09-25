@@ -16,7 +16,6 @@ window.Cloud = (function () {
   const provider = u => (u && u.providerData[0] && u.providerData[0].providerId) || 'password';
   const needsVerify = () => !!(st.user && provider(st.user) === 'password' && !st.user.emailVerified);
   const canSync = () => !!(st.user && !needsVerify() && st.profile);
-  const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 
   function loadScript(src) {
     return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
@@ -65,6 +64,9 @@ window.Cloud = (function () {
     auth.onAuthStateChanged(async u => {
       setTimeout(firstState, 0);
       st.user = u; st.profile = null;
+      // Pista local para saber al abrir la app si hay sesión (sin esperar a Firebase)
+      try { if (u) localStorage.setItem('ib.session', u.uid); else localStorage.removeItem('ib.session'); } catch (e) { }
+      if (u) emit();
       if (u) {
         st.lastSync = +localStorage.getItem('ib.lastSync.' + u.uid) || 0;
         await loadProfile();
@@ -125,11 +127,11 @@ window.Cloud = (function () {
     const p = kind === 'google' ? new fb.auth.GoogleAuthProvider() : new fb.auth.FacebookAuthProvider();
     if (kind === 'facebook') p.addScope('email');
     if (kind === 'google') p.setCustomParameters({ prompt: 'select_account' });
-    try {
-      if (isStandalone() || /iPhone|iPad/.test(navigator.userAgent)) await auth.signInWithRedirect(p);
-      else await auth.signInWithPopup(p);
-    } catch (e) {
-      if (e.code === 'auth/popup-blocked') return auth.signInWithRedirect(p);
+    // Ventana emergente siempre: el método por redirección pierde la sesión cuando la web (github.io)
+    // y Firebase están en dominios distintos (almacenamiento de terceros bloqueado en la app instalada).
+    try { await auth.signInWithPopup(p); }
+    catch (e) {
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') return auth.signInWithRedirect(p);
       throw new Error(errMsg(e));
     }
   }

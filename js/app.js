@@ -1831,9 +1831,13 @@
   }
 
   // Al abrir la app: si hay cuentas y no has entrado ni elegido "sin cuenta", muestra la pantalla de acceso
+  function hideSplash() { const s = $('#splash'); if (s) { s.classList.add('out'); setTimeout(() => s.remove(), 350); } }
+  const gateOpen = () => stack.some(l => l.def.id === 'auth' && l.data.gate);
   function startup() {
     const c = Cloud.st;
-    if (c.configured && c.loaded && !c.user && !S().settings.authSkipped) openAuth('login', { gate: true });
+    hideSplash();
+    if (c.user) { const g = stack.find(l => l.def.id === 'auth'); if (g) g.close(true); onboarding(); return; }
+    if (c.configured && !S().settings.authSkipped) { if (!gateOpen()) openAuth('login', { gate: true }); }
     else onboarding();
   }
   async function confirmLogout() {
@@ -1876,14 +1880,15 @@
 
   function openAuth(mode = 'login', opts = {}) {
     if (!Cloud.st.configured) { toast('Las cuentas aún no están activadas'); return; }
-    if (!Cloud.st.loaded) { toast(Cloud.st.error || 'Conectando con el servicio de cuentas… prueba en unos segundos'); return; }
+    // Puede abrirse antes de que Firebase termine de cargar (al arrancar); los botones esperan si hace falta
+    if (!Cloud.st.loaded && !opts.gate) { toast(Cloud.st.error || 'Conectando con el servicio de cuentas… prueba en unos segundos'); return; }
     const f = { username: '', email: '', password: '', password2: '' };
     let busy = false;
     const L = openLayer({
       id: 'auth', data: { mode, gate: !!opts.gate },
       html: L => {
         const m = L.data.mode;
-        return `<div class="screen up"><div class="page auth-page">
+        return `<div class="screen ${L.data.gate ? 'still' : 'up'}"><div class="page auth-page">
           <div class="page-head">${L.data.gate ? '<h1></h1>' : `<button class="icon-btn ghost back-btn" data-act="close">${ic('close')}</button><h1></h1>`}</div>
           <div class="center">${L.data.gate ? '<div class="auth-logo">🔥</div>' : ''}<div class="brand" style="font-size:40px">IRON<b>BLAZE</b></div>
             <p class="muted" style="margin:4px 0 22px">${m === 'signup' ? 'Crea tu cuenta y guarda tu progreso en la nube' : m === 'reset' ? 'Te enviaremos un correo para crear una contraseña nueva' : 'Bienvenido de nuevo 💪'}</p></div>
@@ -1931,6 +1936,7 @@
         facebook: (t, e, L) => socialLogin('facebook', L),
         submit: async (t, e, L) => {
           if (busy) return;
+          if (!Cloud.st.loaded) { toast(Cloud.st.error || 'Conectando… inténtalo en un segundo'); return; }
           const m = L.data.mode, err = L.el.querySelector('.auth-err');
           const fail = msg => { err.textContent = msg; err.classList.remove('hidden'); busy = false; t.disabled = false; t.textContent = m === 'signup' ? 'Crear cuenta' : m === 'reset' ? 'Enviar correo' : 'Iniciar sesión'; };
           err.classList.add('hidden');
@@ -1954,6 +1960,7 @@
   }
   async function socialLogin(kind, L) {
     const err = L.el.querySelector('.auth-err'); err.classList.add('hidden');
+    if (!Cloud.st.loaded) { toast(Cloud.st.error || 'Conectando… inténtalo en un segundo'); return; }
     try { await Cloud.social(kind); if (Cloud.st.user) { S().settings.onboarded = true; save(); L.close(); toast('✅ Sesión iniciada'); } }
     catch (ex) { err.textContent = ex.message; err.classList.remove('hidden'); }
   }
@@ -2054,6 +2061,7 @@
   // Reacciona a los cambios de sesión / sincronización
   let lastPulled = 0;
   Cloud.onChange(c => {
+    if (c.user && gateOpen()) { const g = stack.find(l => l.def.id === 'auth'); if (g) g.close(true); S().settings.onboarded = true; save(); renderTab(); }
     // Usa tu nombre de usuario como nombre visible si aún tienes el de por defecto
     if (c.profile && c.profile.username && (!S().settings.name || S().settings.name === 'Atleta')) { S().settings.name = c.profile.username; save(); }
     if (c.user && Cloud.needsVerify() && !stack.some(l => l.def.id === 'auth')) openVerify(false);
@@ -2147,5 +2155,9 @@
   document.addEventListener('wheel', e => { if (document.activeElement && document.activeElement.type === 'number' && document.activeElement === e.target) e.target.blur(); }, { passive: true });
   Store.autoSnapshot();
   initSW();
-  Cloud.init().finally(() => setTimeout(startup, 200));
+  // Arranque sin saltos: sin sesión guardada, la pantalla de acceso sale al instante;
+  // con sesión, se ve el logo de carga hasta que Firebase confirma y luego la app.
+  if (Cloud.st.configured && !S().settings.authSkipped && !localStorage.getItem('ib.session')) { openAuth('login', { gate: true }); hideSplash(); }
+  else if (!Cloud.st.configured) hideSplash();
+  Cloud.init().finally(startup);
 })();
