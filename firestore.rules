@@ -1,30 +1,48 @@
-// Reglas de seguridad de Cloud Firestore para IRONBLAZE.
+// Reglas de seguridad de Cloud Firestore para IRONBLAZE (versión reforzada).
 // Copia este contenido en Firebase → Firestore Database → Reglas → Publicar.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    // Correo verificado, o entrada con Google/Facebook
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+    // Correo verificado, o entrada con Google
     function verified() {
       return signedIn() && (request.auth.token.email_verified == true
         || request.auth.token.firebase.sign_in_provider != 'password');
     }
+    function validUsername(n) { return n is string && n.matches('^[a-zA-Z0-9_.]{3,20}$'); }
 
-    // Nombres de usuario únicos: cualquiera puede comprobar si están libres
+    // Nombres de usuario únicos: cualquiera puede comprobar si están libres.
+    // El documento se llama como el nombre en minúsculas y solo guarda el uid del dueño.
     match /usernames/{name} {
       allow read: if true;
-      allow create: if signedIn() && request.resource.data.uid == request.auth.uid
-                    && request.resource.data.keys().hasOnly(['uid']);
-      allow update: if signedIn() && resource.data.uid == request.auth.uid
-                    && request.resource.data.uid == request.auth.uid;
+      allow create, update: if signedIn() && name.matches('^[a-z0-9_.]{3,20}$')
+                            && request.resource.data.keys().hasOnly(['uid'])
+                            && request.resource.data.uid == request.auth.uid
+                            && (resource == null || resource.data.uid == request.auth.uid);
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
-    // Perfil y datos de cada usuario: solo su dueño
+    // Perfil de cada usuario: solo su dueño, y solo con los campos esperados
     match /users/{uid} {
-      allow read, write: if signedIn() && request.auth.uid == uid;
-      match /{document=**} {
-        allow read, write: if verified() && request.auth.uid == uid;
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['username', 'email', 'provider', 'createdAt'])
+        && validUsername(request.resource.data.username);
+
+      // Entrenos: un documento por entreno, tamaño limitado
+      match /workouts/{wid} {
+        allow read, delete: if verified() && isOwner(uid);
+        allow create, update: if verified() && isOwner(uid)
+          && request.resource.data.keys().hasOnly(['u', 'j', 'del'])
+          && (!('j' in request.resource.data) || (request.resource.data.j is string && request.resource.data.j.size() < 500000));
+      }
+      // Rutinas, medidas y ajustes
+      match /meta/{doc} {
+        allow read, delete: if verified() && isOwner(uid);
+        allow create, update: if verified() && isOwner(uid) && doc == 'state'
+          && request.resource.data.keys().hasOnly(['u', 'j'])
+          && request.resource.data.j is string && request.resource.data.j.size() < 900000;
       }
     }
   }
