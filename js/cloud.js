@@ -152,7 +152,12 @@ window.Cloud = (function () {
     emit();
     return !needsVerify();
   }
-  async function signOut() { clearTimeout(timer); await auth.signOut(); }
+  // Al cerrar sesión el móvil se vacía, así que se olvida también qué se había sincronizado:
+  // al volver a entrar se descarga todo de nuevo (y nunca se interpreta el móvil vacío como "lo he borrado todo")
+  function forgetSync() {
+    Object.keys(localStorage).filter(k => k.startsWith('ib.sync.') || k.startsWith('ib.lastSync.')).forEach(k => localStorage.removeItem(k));
+  }
+  async function signOut() { clearTimeout(timer); forgetSync(); await auth.signOut(); }
 
   async function deleteAccount() {
     const u = auth.currentUser; if (!u) return;
@@ -201,7 +206,13 @@ window.Cloud = (function () {
     if (syncing) { again = true; return; }
     syncing = true; st.sync = 'syncing'; st.error = ''; emit();
     const uid = st.user.uid, S = Store.state, key = 'ib.sync.' + uid;
-    const meta = JSON.parse(localStorage.getItem(key) || '{"hashes":{},"lastPull":0,"metaHash":"","metaU":0}');
+    // firstTime: esta cuenta nunca se ha sincronizado en este móvil → lo de la nube (nombre, foto, ajustes) manda
+    const FRESH = '{"hashes":{},"lastPull":0,"metaHash":"","metaU":0}';
+    let firstTime = !localStorage.getItem(key);
+    let meta = JSON.parse(localStorage.getItem(key) || FRESH);
+    // Red de seguridad: si el móvil no tiene entrenos pero constan varios sincronizados, el móvil se ha vaciado
+    // (no es que el usuario los borrase): se vuelve a descargar todo en vez de borrarlos de la nube
+    if (!S.workouts.length && Object.keys(meta.hashes).length > 1) { meta = JSON.parse(FRESH); firstTime = true; }
     const base = db.collection('users').doc(uid), col = base.collection('workouts'), metaRef = base.collection('meta').doc('state');
     const TS = fb.firestore.Timestamp, now = fb.firestore.FieldValue.serverTimestamp();
     try {
@@ -244,6 +255,8 @@ window.Cloud = (function () {
             S.routines = unionById(S.routines, r.routines || []);
             S.custom = unionById(S.custom, r.custom || []);
             S.measures = unionById(S.measures, r.measures || []);
+            // Primera vez en este móvil: el perfil de la cuenta (nombre, foto, peso, unidades) viene de la nube
+            if (firstTime) Object.assign(S.settings, r.settings || {});
           } else {
             S.routines = r.routines || []; S.custom = r.custom || []; S.measures = r.measures || [];
             Object.assign(S.settings, r.settings || {});

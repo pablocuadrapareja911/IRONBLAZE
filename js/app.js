@@ -395,7 +395,28 @@
     mini.classList.toggle('hidden', !show);
     $('#app').classList.toggle('has-mini', !!show);
     if (show) mini.innerHTML = `<span class="pulse"></span><span>${esc(a.title)}</span><span class="mw-time" data-clock>${fmtClock((Date.now() - a.start) / 1000)}</span>`;
+    syncBack();
   }
+
+  // ---------------- Botón "atrás" del móvil ----------------
+  // Mientras haya algo a lo que volver (una pantalla abierta, o una pestaña distinta de Inicio) se guarda
+  // una entrada en el historial. Al pulsar atrás se cierra esa pantalla o se vuelve a Inicio;
+  // solo desde Inicio y sin nada abierto, atrás sale de la app.
+  // tras recargar (p. ej. al aplicar una actualización) la entrada de guardia sigue en el historial: se reaprovecha
+  let histGuard = !!(history.state && history.state.ib), ignorePops = 0;
+  const canGoBack = () => stack.some(l => !l.def.noBack) || tab !== 'home';
+  function syncBack() {
+    if (canGoBack()) { if (!histGuard) { history.pushState({ ib: 1 }, ''); histGuard = true; } }
+    else if (histGuard) { histGuard = false; ignorePops++; history.back(); }
+  }
+  window.addEventListener('popstate', () => {
+    if (ignorePops) { ignorePops--; histGuard = false; syncBack(); return; }
+    histGuard = false;
+    const top = [...stack].reverse().find(l => !l.def.noBack);
+    if (top) { if (top.def.onBack) top.def.onBack(top); else top.close(); }
+    else if (tab !== 'home') { tab = 'home'; renderTab(true); }
+    syncBack();
+  });
   $('#mini-workout').addEventListener('click', () => openActive());
 
   // Reloj global
@@ -647,6 +668,7 @@
   function openRoutineEditor(routine) {
     const draft = routine ? JSON.parse(JSON.stringify(routine)) : { id: Store.uid(), name: '', folder: '', exercises: [] };
     const L = openLayer({
+      onBack: L => L.def.actions.cancel(null, null, L), // 'atrás' pregunta antes de descartar cambios
       html: () => {
         const ssm = ssMap(draft.exercises);
         return `<div class="screen up"><div class="page" style="padding-bottom:40px">
@@ -1066,7 +1088,7 @@
     const w = S().workouts.find(x => x.id === id); if (!w) return;
     const copy = JSON.parse(JSON.stringify(w));
     copy.exercises.forEach(e => { if (e.ss === undefined) e.ss = null; });
-    openLayer({ id: 'we', data: { mode: 'edit', w: copy }, html: awHTML, actions: AW, onInput: awInput });
+    openLayer({ id: 'we', data: { mode: 'edit', w: copy }, html: awHTML, actions: AW, onInput: awInput, onBack: L => AW.cancelEdit(null, null, L) });
   }
 
   function placeholders(ex, si, prev) {
@@ -1850,15 +1872,34 @@
     else onboarding();
   }
   async function confirmLogout() {
-    const v = await modal({ title: '¿Cerrar sesión?', text: 'Tus datos siguen guardados en la nube. ¿Quieres borrarlos también de este dispositivo?', buttons: [{ label: 'Cerrar sesión y mantener datos aquí', value: 'keep', cls: 'primary' }, { label: 'Cerrar sesión y borrar de este móvil', value: 'wipe', cls: 'danger' }, { label: 'Cancelar', value: null }] });
-    if (v) await logout(v === 'wipe');
+    const v = await modal({
+      title: '¿Cerrar sesión?',
+      text: 'Tus entrenos, rutinas y perfil están guardados en tu cuenta. Se quitarán de este móvil y volverán en cuanto inicies sesión de nuevo.',
+      buttons: [{ label: 'Cancelar', value: null }, { label: 'Cerrar sesión', value: 'go', cls: 'danger' }]
+    });
+    if (v) await logout();
   }
-  async function logout(wipe) {
+  // Cierra sesión y deja el móvil limpio para la siguiente cuenta (los datos siguen en la nube)
+  async function logout() {
+    const hasData = S().workouts.length || S().routines.length || S().measures.length || S().active;
     if (Cloud.canSync()) { try { await Cloud.sync(); } catch (e) { } }
+    // Si hay algo que no ha llegado a la nube, avisa antes de borrarlo del móvil
+    if (hasData && (!Cloud.canSync() || Cloud.st.sync !== 'ok')) {
+      const v = await modal({
+        title: '⚠️ Hay datos sin guardar en la nube',
+        text: Cloud.needsVerify()
+          ? 'Tu correo no está verificado, así que tus entrenos aún no se han subido. Si cierras sesión se borrarán de este móvil.'
+          : 'No se han podido subir tus últimos cambios (¿sin conexión?). Si cierras sesión ahora, esos cambios se perderán.',
+        buttons: [{ label: 'Cancelar', value: null, cls: 'primary' }, { label: 'Cerrar sesión igualmente', value: 'go', cls: 'danger' }]
+      });
+      if (v !== 'go') return;
+    }
+    stopRest();
     await Cloud.signOut();
-    if (wipe) { Store.replaceWithEmpty(); localStorage.removeItem('ib.owner'); }
+    // Siempre se deja el móvil limpio: la siguiente cuenta no ve ni hereda nada (nombre, foto, entrenos…)
+    Store.replaceWithEmpty(); localStorage.removeItem('ib.owner');
     S().settings.authSkipped = false; save();
-    closeAll(); toast('Sesión cerrada');
+    tab = 'home'; closeAll(); toast('Sesión cerrada');
     openAuth('login', { gate: true });
   }
 
@@ -1894,12 +1935,12 @@
     const f = { username: '', email: '', password: '', password2: '' };
     let busy = false;
     const L = openLayer({
-      id: 'auth', data: { mode, gate: !!opts.gate },
+      id: 'auth', data: { mode, gate: !!opts.gate }, noBack: !!opts.gate, // la pantalla de acceso inicial no se cierra con 'atrás'
       html: L => {
         const m = L.data.mode;
         return `<div class="screen ${L.data.gate ? 'still' : 'up'}"><div class="page auth-page">
           <div class="page-head">${L.data.gate ? '<h1></h1>' : `<button class="icon-btn ghost back-btn" data-act="close">${ic('close')}</button><h1></h1>`}</div>
-          <div class="center">${L.data.gate ? '<div class="auth-logo">🔥</div>' : ''}<div class="brand" style="font-size:40px">IRON<b>BLAZE</b></div>
+          <div class="center">${L.data.gate ? '<img class="auth-logo" src="icons/logo-256.png" alt="" width="96" height="96">' : ''}<div class="brand" style="font-size:40px">IRON<b>BLAZE</b></div>
             <p class="muted" style="margin:4px 0 22px">${m === 'signup' ? 'Crea tu cuenta y guarda tu progreso en la nube' : m === 'reset' ? 'Te enviaremos un correo para crear una contraseña nueva' : 'Bienvenido de nuevo 💪'}</p></div>
           ${m !== 'reset' ? `
           <button class="btn block social google" data-act="google">${GOOGLE_SVG} Continuar con Google</button>
@@ -1998,7 +2039,7 @@
         },
         resend: async (t) => { try { await Cloud.resendVerification(); toast('📧 Correo reenviado'); t.disabled = true; setTimeout(() => t.disabled = false, 30000); } catch (ex) { toast(ex.message); } },
         later: (t, e, L) => { verifyDismissed = true; L.close(); },
-        out: async (t, e, L) => { L.close(); await logout(false); }
+        out: async (t, e, L) => { L.close(); await logout(); }
       },
       onClose: () => { verifyOpen = false; }
     });
@@ -2025,7 +2066,7 @@
           try { await Cloud.claimUsername(v); L.close(); toast(`✅ ¡Hola, @${v}!`); }
           catch (ex) { er.textContent = ex.message; er.classList.remove('hidden'); t.disabled = false; }
         },
-        out: async (t, e, L) => { L.close(); await logout(false); }
+        out: async (t, e, L) => { L.close(); await logout(); }
       },
       onClose: () => { usernameOpen = false; }
     });

@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.5.1';
+  const VERSION = '1.5.3';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -159,10 +159,14 @@
     // Programa la subida a la nube (si hay cuenta). El entreno en curso no se sube hasta terminarlo.
     if (!fromCloud && window.Cloud) window.Cloud.schedule();
   }
-  // Vacía los datos de entrenamiento (al entrar con otra cuenta en este dispositivo)
+  // Vacía los datos de la cuenta en este dispositivo (al cerrar sesión o entrar con otra cuenta).
+  // Borra entrenos, rutinas y el perfil (nombre, foto, peso…); conserva las preferencias del móvil
+  // (sonido, vibración, avisos, pantalla encendida).
+  const ACCOUNT_SETTINGS = ['name', 'unit', 'restDefault', 'weekGoal', 'bodyweight', 'avatar', 'lastExport'];
   function replaceWithEmpty() {
     const d = defaults();
     state.workouts = []; state.routines = []; state.custom = []; state.measures = []; state.active = null; state.createdAt = d.createdAt;
+    ACCOUNT_SETTINGS.forEach(k => { state.settings[k] = d.settings[k]; });
     indexExercises(); save(true, true);
   }
   window.addEventListener('beforeunload', () => save(true));
