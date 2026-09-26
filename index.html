@@ -7,11 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <!-- Política de seguridad: solo se ejecuta código de la propia app y de Google/Firebase; nada de scripts en línea -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://static.exercisedb.dev https://raw.githubusercontent.com https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://ironblaze.firebaseapp.com https://*.googleusercontent.com https://static.exercisedb.dev https://raw.githubusercontent.com https://fonts.googleapis.com https://fonts.gstatic.com; frame-src https://ironblaze.firebaseapp.com https://accounts.google.com https://apis.google.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://www.gstatic.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://static.exercisedb.dev https://raw.githubusercontent.com https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://apis.google.com https://ironblaze.firebaseapp.com https://*.googleusercontent.com https://static.exercisedb.dev https://raw.githubusercontent.com https://fonts.googleapis.com https://fonts.gstatic.com; frame-src https://ironblaze.firebaseapp.com https://accounts.google.com https://apis.google.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <title>IRONBLAZE</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icons/favicon-64.png" type="image/png" sizes="64x64">
   <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -21,7 +21,7 @@
 </head>
 <body>
   <div id="app">
-    <div id="splash"><div class="sp-logo">🔥</div><div class="sp-brand">IRON<b>BLAZE</b></div><div class="sp-bar"><i></i></div></div>
+    <div id="splash"><img class="sp-logo" src="icons/logo-256.png" alt="" width="120" height="120"><div class="sp-brand">IRON<b>BLAZE</b></div><div class="sp-bar"><i></i></div></div>
     <main id="view"></main>
     <div id="mini-workout" class="mini-workout hidden"></div>
     <nav id="tabbar" class="tabbar">

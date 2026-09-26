@@ -1,13 +1,13 @@
 // IRONBLAZE service worker: arranque instantáneo desde caché, modo sin conexión, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.5.1';
+const VERSION = '1.5.3';
 const APP = 'ironblaze-app-' + VERSION;   // archivos de la app (versión concreta)
 const MEDIA = 'ironblaze-media-v1';        // animaciones y fotos de ejercicios
 const FONTS = 'ironblaze-fonts-v1';        // tipografías de Google Fonts
 const MEDIA_MAX = 400;                     // máximo de imágenes guardadas (evita llenar el móvil)
 const SHELL = ['./', 'index.html', 'css/styles.css', 'js/exercises-data.js', 'js/hd-images.js', 'js/es-content.js', 'js/i18n.js',
   'js/store.js', 'js/bodymap.js', 'js/firebase-config.js', 'js/cloud.js', 'js/charts.js', 'js/app.js', 'icon.svg',
-  'icons/icon-192.png', 'icons/icon-512.png', 'manifest.webmanifest', 'privacy.html'];
+  'icons/icon-192.png', 'icons/icon-512.png', 'icons/logo-256.png', 'icons/favicon-64.png', 'manifest.webmanifest', 'privacy.html'];
 
 self.addEventListener('install', e => {
   // cache: 'reload' salta la caché HTTP (y la de GitHub) para guardar exactamente esta versión
