@@ -704,3 +704,5 @@ h2.section .mini-seg { text-transform: none; letter-spacing: 0; }
 .share-list > div { padding: 6px 0; border-top: 1px solid var(--line); }
 .photo-claim { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
 .photo-claim span { flex: 1; }
+/* App Check (reCAPTCHA v3): se oculta la insignia flotante; el aviso legal va en Ajustes y en la política de privacidad */
+.grecaptcha-badge { visibility: hidden !important; }
