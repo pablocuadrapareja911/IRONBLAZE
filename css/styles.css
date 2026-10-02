@@ -637,3 +637,70 @@ h2.section .mini-seg { text-transform: none; letter-spacing: 0; }
 .set-table.no-w .set-in[data-field="w"], .re-ex.no-w .set-in[data-f="w"] { visibility: hidden; }
 .hyp-far { stroke: #8b8b94; }
 .hyp-pf { fill: var(--orange); opacity: .9; }
+
+/* ---------- Nivel y logros ---------- */
+.lvl-card .row-flex { gap: 12px; }
+.lvl-badge { --rc: var(--orange); width: 50px; height: 50px; flex-shrink: 0; display: grid; place-items: center; border-radius: 14px; transform: rotate(45deg);
+  background: linear-gradient(135deg, var(--rc), rgba(0, 0, 0, .55)); box-shadow: 0 0 18px color-mix(in srgb, var(--rc) 45%, transparent); border: 2px solid var(--rc); }
+.lvl-badge span { transform: rotate(-45deg); font-family: var(--display); font-size: 22px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.lvl-badge.big { width: 82px; height: 82px; border-radius: 22px; margin: 14px auto 4px; }
+.lvl-badge.big span { font-size: 36px; }
+.lvl-title { font-weight: 800; font-size: 16px; }
+.xp-bar { height: 8px; background: var(--line-2); border-radius: 8px; overflow: hidden; margin: 7px 0 5px; }
+.xp-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--orange), var(--orange-2)); border-radius: 8px; }
+.lvl-hero { padding: 18px 16px 16px; }
+.ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ach { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ach .ach-ic { font-size: 28px; filter: grayscale(1); opacity: .45; margin-bottom: 4px; }
+.ach b { font-size: 14px; }
+.ach span { font-size: 12px; color: var(--muted); line-height: 1.35; }
+.ach em { font-style: normal; font-size: 12px; font-weight: 800; color: var(--orange); margin-top: 6px; }
+.ach small { font-size: 11px; color: var(--muted); }
+.ach.on { border-color: rgba(255, 106, 0, .45); background: linear-gradient(160deg, rgba(255, 106, 0, .12), var(--card) 60%); }
+.ach.on .ach-ic { filter: none; opacity: 1; }
+.ach-bar { height: 5px; background: var(--line-2); border-radius: 5px; overflow: hidden; margin-top: 7px; }
+.ach-bar i { display: block; height: 100%; background: var(--orange); }
+.cel-lvl { display: flex; align-items: center; gap: 16px; margin-top: 14px; padding: 12px 14px; border-radius: 14px; background: var(--card-2, #1e1e1e); font-size: 14px; line-height: 1.4; }
+.cel-ach { margin-top: 12px; padding: 12px 14px; border-radius: 14px; background: rgba(255, 106, 0, .1); border: 1px solid rgba(255, 106, 0, .3); }
+.cel-ach-t { font-weight: 800; font-size: 13px; color: var(--orange); margin-bottom: 8px; }
+.cel-ach-i { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.cel-ach-i > span { font-size: 24px; }
+.cel-ach-i b { display: block; font-size: 14px; }
+.cel-ach-i small { color: var(--text-2); font-size: 12px; }
+
+/* ---------- Resumen semanal / mensual ---------- */
+.sum-card { border-color: rgba(255, 106, 0, .35); background: linear-gradient(160deg, rgba(255, 106, 0, .1), var(--card) 55%); }
+.sum-extra { font-size: 13px; color: var(--text-2); margin-top: 10px; line-height: 1.6; }
+.sum-extra b { color: var(--text); }
+
+/* ---------- Recordatorios ---------- */
+.insight.rem { align-items: center; }
+.insight.rem .btn { flex-shrink: 0; }
+.rem-opts { padding: 2px 0 12px; border-bottom: 1px solid var(--line); }
+.rem-days { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.rem-days .chip { min-width: 38px; justify-content: center; }
+.rem-time { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text-2); }
+.rem-time .input { width: 120px; height: 42px; }
+
+/* ---------- Fotos de progreso ---------- */
+.photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.photo-th { position: relative; aspect-ratio: 3 / 4; border-radius: 12px; overflow: hidden; background: var(--card); border: 1px solid var(--line); padding: 0; }
+.photo-th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-th span { position: absolute; left: 6px; bottom: 6px; background: rgba(0, 0, 0, .7); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 6px; }
+.photo-empty { grid-column: 1 / -1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 14px; border: 1.5px dashed var(--line-2); border-radius: 14px; background: transparent; color: var(--text-2); font-size: 30px; }
+.photo-empty span { font-size: 13px; }
+.photo-view { background: #000; display: flex; flex-direction: column; }
+.pv-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; }
+.pv-img { flex: 1; display: grid; place-items: center; min-height: 0; padding: 0 8px; }
+.pv-img img { max-width: 100%; max-height: 72vh; border-radius: 12px; }
+.pv-foot { padding: 12px 16px; }
+.pv-cmp { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px; align-items: start; }
+.pv-cmp figure { margin: 0; }
+.pv-cmp img { width: 100%; border-radius: 10px; display: block; }
+.pv-cmp figcaption { text-align: center; font-size: 13px; color: var(--text-2); margin-top: 6px; font-weight: 700; }
+
+/* ---------- Rutina compartida ---------- */
+.share-list { max-height: 40vh; overflow-y: auto; margin: 0 0 16px; font-size: 14px; line-height: 1.5; }
+.share-list > div { padding: 6px 0; border-top: 1px solid var(--line); }
+.photo-claim { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 13px; color: var(--text-2); }
+.photo-claim span { flex: 1; }
