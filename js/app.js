@@ -72,7 +72,7 @@
     return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
   }
   function fmtDur(sec) {
-    const h = Math.floor(sec / 3600), m = Math.round(sec % 3600 / 60);
+    const t = Math.round(sec / 60), h = Math.floor(t / 60), m = t % 60; // (antes podía salir "1h 60min")
     return h ? `${h}h ${m}min` : `${m}min`;
   }
   function fmtRest(sec) {
@@ -99,6 +99,7 @@
     if (k === 'bw') return w ? `+${fmtW(w)} × ${r}` : `${r} reps`;
     return `${fmtW(w)} × ${r}`;
   }
+  const prVal = p => p.unit === 'w' ? fmtW(p.value) : p.unit === 's' ? p.value + ' s' : p.value + ' reps';
   const typeLabel = { w: 'W', d: 'D', f: 'F' };
   const typeName = { n: 'Normal', w: 'Calentamiento', d: 'Drop set', f: 'Al fallo' };
   const typeColor = t => t === 'w' ? 'var(--yellow)' : t === 'd' ? 'var(--blue)' : t === 'f' ? 'var(--red)' : 'var(--muted)';
@@ -227,8 +228,12 @@
   let wakeLock = null;
   async function keepAwake(on) {
     try {
-      if (on && S().settings.keepAwake && 'wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen');
-      else if (!on && wakeLock) { await wakeLock.release(); wakeLock = null; }
+      if (on && S().settings.keepAwake && 'wakeLock' in navigator && !wakeLock) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        // El sistema lo suelta solo al cambiar de app: así se vuelve a pedir al regresar al entreno
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      }
+      else if (!on && wakeLock) { const wl = wakeLock; wakeLock = null; await wl.release(); }
     } catch (e) { }
   }
   const swPost = msg => { try { navigator.serviceWorker && navigator.serviceWorker.controller && navigator.serviceWorker.controller.postMessage(msg); } catch (e) { } };
@@ -510,7 +515,8 @@
   }
   function backupDue() {
     const s = S().settings;
-    return s.backupReminder && S().workouts.length >= 3 && Date.now() - (s.lastExport || 0) > 7 * DAY;
+    // Con la cuenta sincronizando, los entrenos ya están a salvo en la nube: no hace falta insistir
+    return s.backupReminder && !Cloud.canSync() && S().workouts.length >= 3 && Date.now() - (s.lastExport || 0) > 7 * DAY;
   }
 
   let feedLimit = 15;
@@ -657,7 +663,9 @@
         back: (t, e, L) => L.close(),
         ex: t => openExerciseDetail(t.dataset.id),
         start: t => { const r = JSON.parse(JSON.stringify(p.routines[+t.dataset.i])); startWorkout(r); },
-        add: () => {
+        add: async () => {
+          // Evita duplicarlas si el programa ya se había guardado antes
+          if (S().routines.some(r => r.folder === p.name) && !await confirmM('Ya tienes este programa', `Las rutinas de "${esc(p.name)}" ya están en tus rutinas. ¿Quieres añadirlas otra vez?`, 'Añadir otra vez')) return;
           p.routines.forEach(r => { const c = JSON.parse(JSON.stringify(r)); c.id = Store.uid(); c.folder = p.name; S().routines.push(c); });
           save(); toast(`✅ ${p.routines.length} rutinas añadidas`); closeAll(); tab = 'workout'; renderTab(true);
         }
@@ -668,6 +676,7 @@
   // ---------------- Editor de rutinas ----------------
   function openRoutineEditor(routine) {
     const draft = routine ? JSON.parse(JSON.stringify(routine)) : { id: Store.uid(), name: '', folder: '', exercises: [] };
+    const original = JSON.stringify(draft);
     const L = openLayer({
       onBack: L => L.def.actions.cancel(null, null, L), // 'atrás' pregunta antes de descartar cambios
       html: () => {
@@ -701,7 +710,8 @@
         if (f === 'w') s.w = parseVal(k, t.value); else s.r = t.value === '' ? '' : parseFloat(t.value);
       },
       actions: {
-        cancel: async (t, e, L) => { if (!draft.exercises.length || await confirmM('¿Descartar cambios?', 'Los cambios de esta rutina no se guardarán.', 'Descartar', true)) L.close(); },
+        // Solo pregunta si de verdad has cambiado algo
+        cancel: async (t, e, L) => { if (JSON.stringify(draft) === original || (!routine && !draft.exercises.length) || await confirmM('¿Descartar cambios?', 'Los cambios de esta rutina no se guardarán.', 'Descartar', true)) L.close(); },
         save: (t, e, L) => {
           if (!draft.name.trim()) { toast('Ponle un nombre a la rutina'); L.el.querySelector('.title-input').focus(); return; }
           if (!draft.exercises.length) { toast('Añade al menos un ejercicio'); return; }
@@ -1091,7 +1101,7 @@
     const w = S().workouts.find(x => x.id === id); if (!w) return;
     const copy = JSON.parse(JSON.stringify(w));
     copy.exercises.forEach(e => { if (e.ss === undefined) e.ss = null; });
-    openLayer({ id: 'we', data: { mode: 'edit', w: copy }, html: awHTML, actions: AW, onInput: awInput, onBack: L => AW.cancelEdit(null, null, L) });
+    openLayer({ id: 'we', data: { mode: 'edit', w: copy, orig: JSON.stringify(copy) }, html: awHTML, actions: AW, onInput: awInput, onBack: L => AW.cancelEdit(null, null, L) });
   }
 
   function placeholders(ex, si, prev) {
@@ -1307,7 +1317,7 @@
       openFinish();
     },
     // --- Solo en modo edición ---
-    cancelEdit: async (t, e, L) => { if (await confirmM('¿Descartar cambios?', 'Los cambios en este entreno no se guardarán.', 'Descartar', true)) L.close(); },
+    cancelEdit: async (t, e, L) => { if (JSON.stringify(L.data.w) === L.data.orig || await confirmM('¿Descartar cambios?', 'Los cambios en este entreno no se guardarán.', 'Descartar', true)) L.close(); },
     saveEdit: (t, e, L) => {
       const w = L.data.w;
       const exercises = w.exercises.map(x => ({ exId: x.exId, notes: x.notes || '', ss: x.ss || null, sets: x.sets.filter(s => s.done).map(s => ({ type: s.type, w: s.w === '' ? 0 : s.w, r: s.r === '' ? 0 : s.r, done: true })) })).filter(x => x.sets.length);
@@ -1390,7 +1400,7 @@
           <input class="title-input" data-f="title" value="${esc(draft.title)}" placeholder="Nombre del entreno">
           <div class="muted" style="font-size:13px">${fmtDate(a.start, true)}</div>
           <div class="stats-row"><div class="stat"><div class="v" style="font-size:17px">${fmtDur(st.duration)}</div><div class="l">Duración</div></div><div class="stat"><div class="v" style="font-size:17px">${fmtVol(st.volume)}</div><div class="l">Volumen</div></div><div class="stat"><div class="v" style="font-size:17px">${st.sets}</div><div class="l">Series</div></div></div>
-          ${prs.length ? `<h2 class="section">🏆 Nuevos récords</h2><div class="card pr-list">${prs.map(p => `<div class="pr-row">${thumb(Store.getEx(p.exId), 'sm')}<div class="nm">${esc(Store.getEx(p.exId).n)}</div><div class="val">${p.unit === 'w' ? fmtW(p.value) : p.value + ' reps'}<small>${p.label}</small></div></div>`).join('')}</div>` : ''}
+          ${prs.length ? `<h2 class="section">🏆 Nuevos récords</h2><div class="card pr-list">${prs.map(p => `<div class="pr-row">${thumb(Store.getEx(p.exId), 'sm')}<div class="nm">${esc(Store.getEx(p.exId).n)}</div><div class="val">${prVal(p)}<small>${p.label}</small></div></div>`).join('')}</div>` : ''}
           ${muscleSection(BodyMap.scoresFromWorkouts([tmp], Store.getEx))}
           <div class="field mt"><label>Notas</label><textarea class="textarea" data-f="notes" placeholder="¿Cómo ha ido? Sensaciones, energía, molestias…">${esc(draft.notes)}</textarea></div>
           ${routine ? `<div class="setting-row"><div class="sr-main"><div class="sr-title">Actualizar rutina "${esc(routine.name)}"</div><div class="sr-sub">Guarda los pesos y reps de hoy como objetivo para la próxima vez</div></div><button class="toggle ${draft.updateRoutine ? 'on' : ''}" data-act="upd"></button></div>` : ''}
@@ -1454,7 +1464,7 @@
           <div class="wc-stats"><div>Duración<b>${fmtDur(st.duration)}</b></div><div>Volumen<b>${fmtVol(st.volume)}</b></div><div>Series<b>${st.sets}</b></div><div>Récords<b>${prs.length}</b></div></div>
           ${w.notes ? `<div class="card mt" style="color:var(--text-2);white-space:pre-wrap">${esc(w.notes)}</div>` : ''}
           <div class="quick-grid three mt"><button class="btn sm" data-act="edit">${ic('edit')} Editar</button><button class="btn sm" data-act="repeat">${ic('repeat')} Repetir</button><button class="btn sm" data-act="asRoutine">${ic('save')} Rutina</button></div>
-          ${prs.length ? `<h2 class="section">🏆 Récords</h2><div class="card pr-list">${prs.map(p => `<div class="pr-row"><div class="nm">${esc(Store.getEx(p.exId).n)}</div><div class="val">${p.unit === 'w' ? fmtW(p.value) : p.value + ' reps'}<small>${p.label}</small></div></div>`).join('')}</div>` : ''}
+          ${prs.length ? `<h2 class="section">🏆 Récords</h2><div class="card pr-list">${prs.map(p => `<div class="pr-row"><div class="nm">${esc(Store.getEx(p.exId).n)}</div><div class="val">${prVal(p)}<small>${p.label}</small></div></div>`).join('')}</div>` : ''}
           ${muscleSection(BodyMap.scoresFromWorkouts([w], Store.getEx))}
           <h2 class="section">Ejercicios</h2>
           ${w.exercises.map(e => {
@@ -1668,6 +1678,8 @@
           let any = false;
           FIELDS.forEach(f => { if (res[f[0]] !== '') { m[f[0]] = f[0] === 'weight' ? Store.fromDisplay(res[f[0]]) : parseFloat(res[f[0]]); any = true; } });
           if (!any) { toast('Introduce al menos un valor'); return; }
+          // Si es el peso más reciente, pasa a ser tu peso corporal (se usa en el volumen y en el perfil)
+          if (m.weight > 0 && !S().measures.some(x => +x.weight > 0 && x.date > m.date)) S().settings.bodyweight = m.weight;
           S().measures.push(m); save(); L.render(); toast('✅ Medición guardada');
         }
       }
@@ -1714,8 +1726,8 @@
         out.innerHTML = used.length ? `Por lado: <b style="color:var(--text)">${used.join(' + ')}</b>${side > 0.01 ? `<br><span style="color:var(--yellow)">Faltan ${nf(side * 2, 2)} ${u} para cuadrar</span>` : ''}` : 'Solo la barra';
       }
       if (L.data.t === 'wu') {
-        const w = +c.target, tb = el.querySelector('#wu-table');
-        tb.innerHTML = w > 0 ? [[+c.bar || 20, 10, 'Barra vacía'], [w * .4, 8, '40%'], [w * .6, 5, '60%'], [w * .8, 3, '80%'], [w * .9, 1, '90%']].map(([x, r, l]) => `<tr><td>${l}</td><td class="muted">${r} reps</td><td>${nf(Math.round(x / 2.5) * 2.5)} ${u}</td></tr>`).join('') : '';
+        const w = +c.target, tb = el.querySelector('#wu-table'), step = u === 'lbs' ? 5 : 2.5;
+        tb.innerHTML = w > 0 ? [[+c.bar || (u === 'lbs' ? 45 : 20), 10, 'Barra vacía'], [w * .4, 8, '40%'], [w * .6, 5, '60%'], [w * .8, 3, '80%'], [w * .9, 1, '90%']].map(([x, r, l]) => `<tr><td>${l}</td><td class="muted">${r} reps</td><td>${nf(Math.round(x / step) * step)} ${u}</td></tr>`).join('') : '';
       }
     }
   }
@@ -1776,7 +1788,7 @@
           <div class="muted center mt" style="font-size:12px;line-height:1.6;padding:20px 0">
             <div class="brand" style="font-size:22px">IRON<b>BLAZE</b></div>
             Versión ${Store.VERSION}<br>
-            Animaciones: <a class="link" href="https://oss.exercisedb.dev" target="_blank" rel="noopener">ExerciseDB</a> · Fotos HD: <a class="link" href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a><br>Tus datos se guardan solo en este dispositivo.</div>
+            Animaciones: <a class="link" href="https://oss.exercisedb.dev" target="_blank" rel="noopener">ExerciseDB</a> · Fotos HD: <a class="link" href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a><br>${Cloud.st.user ? 'Tus datos se guardan en este móvil y en tu cuenta.' : 'Tus datos se guardan solo en este dispositivo.'}</div>
         </div></div>`;
       },
       bind: (el, L) => {
@@ -1829,8 +1841,15 @@
         },
         demo: async (t, e, L) => { if (await confirmM('Datos de ejemplo', 'Se añadirán ~10 semanas de entrenamientos ficticios.', 'Generar')) { seedDemo(); toast('✅ Datos de ejemplo cargados'); L.render(); } },
         reset: async () => {
-          if (await confirmM('¿Borrar TODO?', 'Se eliminarán entrenos, rutinas, medidas y ajustes. Exporta una copia antes si la quieres conservar.', 'Borrar todo', true)) {
-            stopRest(); Store.reset(); hayCache.clear(); closeAll(); toast('Datos borrados');
+          const cloud = !!Cloud.st.user;
+          // Con cuenta hay que borrar también la nube; si no, los datos volverían a bajar en la siguiente sincronización
+          if (cloud && !Cloud.canSync()) { toast('Necesitas conexión (y el correo verificado) para borrar también los datos de tu cuenta'); return; }
+          if (await confirmM('¿Borrar TODO?', cloud ? 'Se eliminarán entrenos, rutinas, medidas y ajustes de este móvil <b>y de tu cuenta en la nube</b>. Exporta una copia antes si la quieres conservar.' : 'Se eliminarán entrenos, rutinas, medidas y ajustes. Exporta una copia antes si la quieres conservar.', 'Borrar todo', true)) {
+            try { if (cloud) await Cloud.resetData(); } catch (ex) { toast(ex.message || 'No se pudo borrar (¿sin conexión?)'); return; }
+            const keep = { authSkipped: S().settings.authSkipped, onboarded: S().settings.onboarded };
+            stopRest(); Store.reset(); Object.assign(S().settings, keep);
+            if (cloud && Cloud.st.profile && Cloud.st.profile.username) S().settings.name = Cloud.st.profile.username;
+            save(); hayCache.clear(); closeAll(); toast('Datos borrados');
           }
         }
       }
@@ -2117,7 +2136,8 @@
         del: async () => {
           const v = await modal({ title: '⚠️ Eliminar cuenta', text: 'Se borrará tu cuenta y <b>todos tus entrenos de la nube</b> para siempre. Los datos de este móvil se mantienen. Escribe <b>ELIMINAR</b> para confirmar.', html: '<input class="input" placeholder="ELIMINAR" style="margin-bottom:16px">', buttons: [{ label: 'Cancelar', value: null }, { label: 'Eliminar', value: 'input', cls: 'danger' }] });
           if (!v || v.trim().toUpperCase() !== 'ELIMINAR') return;
-          try { await Cloud.deleteAccount(); localStorage.removeItem('ib.owner'); S().settings.authSkipped = false; save(); closeAll(); toast('Cuenta eliminada'); openAuth('login', { gate: true }); }
+          // ib.owner se conserva: si luego entras con otra cuenta, se te preguntará qué hacer con estos datos
+          try { await Cloud.deleteAccount(); S().settings.authSkipped = false; save(); closeAll(); toast('Cuenta eliminada'); openAuth('login', { gate: true }); }
           catch (ex) { toast(ex.message); }
         }
       }

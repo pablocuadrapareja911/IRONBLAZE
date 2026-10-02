@@ -203,7 +203,14 @@ window.Cloud = (function () {
   };
 
   // Primera sincronización tras entrar: comprueba si el dispositivo tenía datos de otra cuenta
-  async function firstSync() {
+  // Si se pide dos veces a la vez (al entrar y al recuperar la conexión) se comparte la misma ejecución,
+  // para no preguntar dos veces qué hacer con los datos de otra cuenta
+  let firstP = null;
+  function firstSync() {
+    if (!firstP) firstP = firstSyncRun().finally(() => { firstP = null; });
+    return firstP;
+  }
+  async function firstSyncRun() {
     const owner = localStorage.getItem('ib.owner');
     const S = Store.state;
     const hasLocal = S.workouts.length || S.routines.length;
@@ -309,6 +316,13 @@ window.Cloud = (function () {
     if (again) { again = false; schedule(1500); }
   }
   function schedule(ms = 8000) {
+    // Si la app se abrió sin conexión no se pudo leer el perfil: se reintenta al volver la conexión
+    // (sin esto, la sincronización no arrancaba hasta cerrar y abrir la app)
+    if (st.loaded && st.user && !st.profileLoaded) {
+      clearTimeout(timer);
+      timer = setTimeout(async () => { if (!st.profileLoaded) { await loadProfile(); emit(); } if (canSync()) firstSync(); }, ms);
+      return;
+    }
     if (!canSync()) return;
     clearTimeout(timer); timer = setTimeout(sync, ms);
   }

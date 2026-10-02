@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.6.0';
+  const VERSION = '1.6.1';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -340,6 +340,8 @@
         else if (best.e1rm > prev.e1rm + 0.01) prs.push({ exId: ex.exId, label: '1RM estimado', value: best.e1rm, unit: 'w' });
         if (k === 'bw' && best.reps > prev.reps) prs.push({ exId: ex.exId, label: 'Máx. reps', value: best.reps, unit: 'r' });
       }
+      // Ejercicios de tiempo (planchas, hipopresivos…): récord de duración, igual que el aviso durante el entreno
+      if (k === 'time' && best.reps > prev.reps) prs.push({ exId: ex.exId, label: 'Máx. tiempo', value: best.reps, unit: 's' });
     }
     return prs;
   }
