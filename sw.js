@@ -1,6 +1,6 @@
 // IRONBLAZE service worker: arranque instantáneo desde caché, modo sin conexión, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 const APP = 'ironblaze-app-' + VERSION;   // archivos de la app (versión concreta)
 const MEDIA = 'ironblaze-media-v1';        // animaciones y fotos de ejercicios
 const FONTS = 'ironblaze-fonts-v1';        // tipografías de Google Fonts
