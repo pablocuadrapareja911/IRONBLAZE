@@ -386,6 +386,9 @@
     if (tab === b.dataset.tab) { view.scrollTo({ top: 0, behavior: 'smooth' }); return; }
     tab = b.dataset.tab; renderTab(true);
   });
+  // Solo toca la pantalla si su contenido ha cambiado: al conectar la cuenta y sincronizar se pide redibujar
+  // varias veces, y rehacerla entera hacía parpadear las imágenes (las "dos transiciones" del arranque)
+  function setView(html) { if (view.__html === html) return; view.__html = html; view.innerHTML = html; }
   function renderTab(reset) {
     document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
     const top = view.scrollTop;
@@ -530,7 +533,7 @@
     const hello = h < 6 ? 'Noche de hierro' : h < 13 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches';
     const tips = insights();
     queueRemSync();
-    view.innerHTML = `<div class="page">
+    setView(`<div class="page">
       <div class="page-head"><h1 class="brand">IRON<b>BLAZE</b></h1>
         <div class="h-actions"><button class="icon-btn" data-act="prs" title="Récords">${ic('trophy')}</button><button class="icon-btn" data-act="settings" title="Ajustes">${ic('gear')}</button></div></div>
       <div class="hero">
@@ -559,7 +562,7 @@
         `<div class="card empty"><div class="big">🏋️</div><h4>Tu historial está vacío</h4><p>Empieza un entrenamiento o elige uno de nuestros programas listos para usar.</p>
           <div class="quick-grid"><button class="btn primary" data-act="quick">Empezar</button><button class="btn outline" data-act="programs">Programas</button></div>
           <p class="mt" style="margin:14px 0 0;font-size:13px">¿Solo quieres curiosear? <span class="link" data-act="demo">Carga datos de ejemplo</span></p></div>`}
-    </div>`;
+    </div>`);
     VA = {
       openW: t => openWorkoutDetail(t.dataset.id),
       settings: openSettings, prs: openPRs,
@@ -590,7 +593,7 @@
     const groups = {};
     st.routines.forEach(r => { const f = r.folder || ''; (groups[f] = groups[f] || []).push(r); });
     const folders = Object.keys(groups).sort((a, b) => a === '' ? 1 : b === '' ? -1 : a.localeCompare(b));
-    view.innerHTML = `<div class="page">
+    setView(`<div class="page">
       <div class="page-head"><h1>Entrenar</h1></div>
       <h2 class="section" style="margin-top:6px">Inicio rápido</h2>
       <button class="btn ${st.active ? '' : 'primary'} block" style="height:52px" data-act="${st.active ? 'resume' : 'empty'}">${st.active ? 'Continuar entrenamiento en curso' : ic('plus') + ' Empezar entrenamiento vacío'}</button>
@@ -601,7 +604,7 @@
           ${f ? `<span style="margin-left:auto" data-act="folderMenu" data-f="${esc(f)}">${ic('more')}</span>` : ''}</div>
         ${closedFolders.has(f) ? '' : groups[f].map(routineCard).join('')}`).join('') :
         `<div class="card empty mt"><div class="big">📋</div><h4>Aún no tienes rutinas</h4><p>Crea la tuya o añade un programa probado (PPL, Upper/Lower, 5×5…).</p><button class="btn primary" data-act="programs">Ver programas</button></div>`}
-    </div>`;
+    </div>`);
     VA = {
       empty: () => startWorkout(null), resume: openActive,
       newR: () => openRoutineEditor(null), programs: openPrograms,
@@ -899,6 +902,7 @@
 
   const libFilter = { q: '', bp: 'all', eq: 'all', sort: 'rel', view: 'grid' };
   function renderExercisesTab() {
+    view.__html = null; // (esta pestaña se construye por partes: que la siguiente vuelta a Inicio/Perfil la pinte)
     view.innerHTML = `<div class="page"><div class="page-head"><h1>Ejercicios</h1><button class="btn sm outline" data-act="create">${ic('plus')} Crear</button></div><div id="lib"></div></div>`;
     exerciseBrowser($('#lib'), { filter: libFilter, onTap: id => openExerciseDetail(id) });
     VA = { create: () => openCreateExercise(null, () => renderTab()) };
@@ -1558,7 +1562,7 @@
     const monthCount = ws.filter(w => { const d = new Date(w.start); return d.getMonth() === base.getMonth() && d.getFullYear() === base.getFullYear(); }).length;
     const bw = Store.bodyweight();
 
-    view.innerHTML = `<div class="page">
+    setView(`<div class="page">
       <div class="page-head"><h1>Perfil</h1><div class="h-actions"><button class="icon-btn" data-act="settings">${ic('gear')}</button></div></div>
       <div class="row-flex"><div class="avatar-wrap" data-act="photo">${avatarHTML('lg')}<span class="avatar-edit">${ic('edit')}</span></div>
         <div style="flex:1"><div style="font-size:21px;font-weight:800;cursor:pointer" data-act="rename">${esc(st.settings.name)} <span class="muted" style="font-size:13px">${ic('edit')}</span></div>
@@ -1607,7 +1611,7 @@
       </div>
       ${Cloud.st.user ? `<button class="btn danger block mt" data-act="logout">${ic('logout')} Cerrar sesión</button>` : ''}
       <div class="muted center mt" style="font-size:12px;padding:10px 0">IRONBLAZE · Volumen total levantado: <b style="color:var(--orange)">${fmtVol(tot.v)}</b></div>
-    </div>`;
+    </div>`);
     Charts.bar($('#wchart'), wdata);
     VA = {
       settings: openSettings, prs: openPRs, measures: openMeasures, calc: openCalculators,
@@ -1945,7 +1949,7 @@
   }
 
   // Al abrir la app: si hay cuentas y no has entrado ni elegido "sin cuenta", muestra la pantalla de acceso
-  function hideSplash() { const s = $('#splash'); if (s) { s.classList.add('out'); setTimeout(() => s.remove(), 350); } }
+  function hideSplash() { const s = $('#splash'); if (s && !s.classList.contains('out')) { s.classList.add('out'); setTimeout(() => s.remove(), 250); } }
   const gateOpen = () => stack.some(l => l.def.id === 'auth' && l.data.gate);
   function startup() {
     const c = Cloud.st;
@@ -2715,9 +2719,10 @@
   initSW();
   // Lo que no hace falta para ver la primera pantalla se carga cuando el móvil queda libre
   (window.requestIdleCallback || (f => setTimeout(f, 2500)))(() => Store.loadExerciseText(), { timeout: 6000 });
-  // Arranque sin saltos: sin sesión guardada, la pantalla de acceso sale al instante;
-  // con sesión, se ve el logo de carga hasta que Firebase confirma y luego la app.
-  if (Cloud.st.configured && !S().settings.authSkipped && !localStorage.getItem('ib.session')) { openAuth('login', { gate: true }); hideSplash(); }
-  else if (!Cloud.st.configured) hideSplash();
+  // Arranque sin saltos: sin sesión guardada, la pantalla de acceso sale al instante; con sesión (o sin cuenta)
+  // se entra directamente, porque los datos ya están en el móvil: Firebase termina de conectar por detrás.
+  // (Antes el logo de carga esperaba a Firebase 1-3 s y luego la pantalla de inicio se redibujaba: "dos transiciones")
+  if (Cloud.st.configured && !S().settings.authSkipped && !localStorage.getItem('ib.session')) openAuth('login', { gate: true });
+  hideSplash();
   Cloud.init().finally(() => { startup(); handleSharedRoutine(); });
 })();
