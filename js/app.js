@@ -529,6 +529,7 @@
     const h = new Date().getHours();
     const hello = h < 6 ? 'Noche de hierro' : h < 13 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches';
     const tips = insights();
+    queueRemSync();
     view.innerHTML = `<div class="page">
       <div class="page-head"><h1 class="brand">IRON<b>BLAZE</b></h1>
         <div class="h-actions"><button class="icon-btn" data-act="prs" title="Récords">${ic('trophy')}</button><button class="icon-btn" data-act="settings" title="Ajustes">${ic('gear')}</button></div></div>
@@ -547,6 +548,8 @@
       </div>
       ${st.active ? `<div class="card mt" style="border-color:var(--orange)"><div class="row-flex"><div style="flex:1"><b>Entrenamiento en curso</b><div class="muted" style="font-size:13px">${esc(st.active.title)} · <span data-clock>${fmtClock((Date.now() - st.active.start) / 1000)}</span></div></div><button class="btn primary sm" data-act="resume">Continuar</button></div></div>` :
         `<button class="btn primary block mt" style="height:54px;font-size:16px" data-act="quick">${ic('play')} Empezar entrenamiento</button>`}
+      ${reminderCards()}
+      ${summaryCard()}
       ${backupDue() ? `<div class="card mt insight backup"><div class="row-flex"><span class="ins-ic">💾</span><div style="flex:1"><b>Haz una copia de seguridad</b><div class="muted" style="font-size:13px">Tus entrenos solo viven en este móvil. Guarda una copia en Drive, correo o WhatsApp.</div></div></div>
         <div class="quick-grid mt-s"><button class="btn primary sm" data-act="backupNow">Guardar copia</button><button class="btn sm" data-act="backupLater">Ahora no</button></div></div>` : ''}
       ${tips.length ? `<div class="mt">${tips.map(t => `<div class="insight ${t.cls}"><span class="ins-ic">${t.icon}</span><span>${t.text}</span></div>`).join('')}</div>` : ''}
@@ -564,6 +567,8 @@
       programs: openPrograms,
       goProfile: () => { tab = 'profile'; renderTab(true); },
       moreFeed: () => { feedLimit += 15; renderHome(); },
+      hypoStart: startHypoSession,
+      sumClose: t => { const k = t.dataset.k; S().settings[k[0] === 'm' ? 'sumSeenM' : 'sumSeenW'] = k; save(); renderHome(); },
       backupNow: async () => { await exportBackup(); renderHome(); },
       backupLater: () => { S().settings.lastExport = Date.now() - 4 * DAY; save(); renderHome(); },
       demo: async () => { if (await confirmM('Datos de ejemplo', 'Se generarán ~10 semanas de entrenamientos ficticios (Push/Pull/Legs) para que veas la app en acción. Puedes borrarlos luego en Ajustes.', 'Generar')) { seedDemo(); renderTab(); toast('✅ Datos de ejemplo cargados'); } }
@@ -618,11 +623,13 @@
     const v = await sheet({
       title: esc(r.name), options: [
         { label: 'Editar rutina', icon: 'edit', value: 'edit' },
+        { label: 'Compartir rutina', icon: 'share', value: 'share', sub: 'Envía un enlace para que otra persona la añada' },
         { label: 'Duplicar', icon: 'copy', value: 'dup' },
         { label: 'Mover a carpeta', icon: 'folder', value: 'move' },
         { label: 'Eliminar rutina', icon: 'trash', value: 'del', danger: true }]
     });
     if (v === 'edit') openRoutineEditor(r);
+    if (v === 'share') shareRoutine(r);
     if (v === 'dup') { const c = JSON.parse(JSON.stringify(r)); c.id = Store.uid(); c.name += ' (copia)'; S().routines.push(c); save(); renderTab(); toast('Rutina duplicada'); }
     if (v === 'move') {
       const folders = [...new Set(S().routines.map(x => x.folder).filter(Boolean))];
@@ -1418,21 +1425,26 @@
           };
           cleanupSS(w.exercises);
           const prs = Store.workoutPRs(w);
+          // Nivel y logros antes de guardar, para celebrar lo que se consigue con este entreno
+          const lvBefore = levelInfo().n, seen = S().settings.achSeen || unlockedIds();
           S().workouts.unshift(w);
           S().workouts.sort((x, y) => y.start - x.start);
           if (routine && draft.updateRoutine) {
             routine.exercises = a.exercises.filter(e => e.sets.some(s => s.done)).map(e => ({ exId: e.exId, rest: e.rest, ss: e.ss || null, sets: e.sets.filter(s => s.done).map(s => ({ type: s.type, w: s.w, r: s.r })) }));
             cleanupSS(routine.exercises);
           }
-          S().active = null; stopRest(); Store.save(true); Store.autoSnapshot();
+          S().active = null; stopRest();
+          Store.save(); // (sin escribir aún: solo invalida la caché de cálculos para ver el nivel nuevo)
+          const lv = levelInfo(), newAch = achievements().filter(x => x.done && !seen.includes(x.id));
+          S().settings.achSeen = unlockedIds(); Store.save(true); Store.autoSnapshot();
           closeAll(); tab = 'home'; renderTab(true);
-          celebrate(w, prs);
+          celebrate(w, prs, { levelUp: lv.n > lvBefore ? lv : null, newAch });
         }
       }
     });
   }
-  function celebrate(w, prs) {
-    const n = S().workouts.length, st = Store.workoutStats(w);
+  function celebrate(w, prs, extra = {}) {
+    const n = S().workouts.length, st = Store.workoutStats(w), na = extra.newAch || [];
     confetti(); beep(2);
     openLayer({
       transient: true,
@@ -1441,9 +1453,11 @@
         <h2>¡Brutal!</h2><p>Has completado tu entreno <b style="color:var(--orange)">#${n}</b></p></div>
         <div style="padding:16px 20px 20px">
           <div class="stats-row" style="margin-top:0"><div class="stat"><div class="v" style="font-size:16px">${fmtDur(st.duration)}</div><div class="l">Duración</div></div><div class="stat"><div class="v" style="font-size:16px">${fmtVol(st.volume)}</div><div class="l">Volumen</div></div><div class="stat"><div class="v" style="font-size:16px">${prs.length}</div><div class="l">Récords</div></div></div>
+          ${extra.levelUp ? `<div class="cel-lvl"><div class="lvl-badge" style="--rc:${extra.levelUp.color}"><span>${extra.levelUp.n}</span></div><div>⬆️ <b>¡Subes al nivel ${extra.levelUp.n}!</b><br><span style="color:${extra.levelUp.color}">${extra.levelUp.rank}</span></div></div>` : ''}
+          ${na.length ? `<div class="cel-ach"><div class="cel-ach-t">🏅 Logro${na.length > 1 ? 's' : ''} desbloqueado${na.length > 1 ? 's' : ''}</div>${na.slice(0, 3).map(a => `<div class="cel-ach-i"><span>${a.icon}</span><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div></div>`).join('')}${na.length > 3 ? `<div class="muted" style="font-size:12px">y ${na.length - 3} más</div>` : ''}</div>` : ''}
           <button class="btn primary block mt" data-act="ok">Hecho</button>
-          <button class="btn outline block mt-s" data-act="view">Ver resumen</button></div></div>`,
-      actions: { ok: (t, e, L) => { L.close(); renderTab(); }, view: (t, e, L) => { L.close(); openWorkoutDetail(w.id); } }
+          <div class="quick-grid mt-s"><button class="btn outline" data-act="view">Ver resumen</button><button class="btn outline" data-act="share">${ic('share')} Compartir</button></div></div></div>`,
+      actions: { ok: (t, e, L) => { L.close(); renderTab(); }, view: (t, e, L) => { L.close(); openWorkoutDetail(w.id); }, share: () => shareWorkoutImage(w.id) }
     });
   }
 
@@ -1464,6 +1478,7 @@
           <div class="wc-stats"><div>Duración<b>${fmtDur(st.duration)}</b></div><div>Volumen<b>${fmtVol(st.volume)}</b></div><div>Series<b>${st.sets}</b></div><div>Récords<b>${prs.length}</b></div></div>
           ${w.notes ? `<div class="card mt" style="color:var(--text-2);white-space:pre-wrap">${esc(w.notes)}</div>` : ''}
           <div class="quick-grid three mt"><button class="btn sm" data-act="edit">${ic('edit')} Editar</button><button class="btn sm" data-act="repeat">${ic('repeat')} Repetir</button><button class="btn sm" data-act="asRoutine">${ic('save')} Rutina</button></div>
+          <button class="btn block mt-s" data-act="shareImg">${ic('share')} Compartir como imagen</button>
           ${prs.length ? `<h2 class="section">🏆 Récords</h2><div class="card pr-list">${prs.map(p => `<div class="pr-row"><div class="nm">${esc(Store.getEx(p.exId).n)}</div><div class="val">${prVal(p)}<small>${p.label}</small></div></div>`).join('')}</div>` : ''}
           ${muscleSection(BodyMap.scoresFromWorkouts([w], Store.getEx))}
           <h2 class="section">Ejercicios</h2>
@@ -1481,6 +1496,7 @@
         edit: () => openEditWorkout(id),
         repeat: () => repeatWorkout(id),
         asRoutine: () => saveAsRoutine(id),
+        shareImg: () => shareWorkoutImage(id),
         menu: async (t, e, L) => {
           const v = await sheet({ options: [{ label: 'Editar entreno', icon: 'edit', value: 'edit', sub: 'Series, pesos, ejercicios, fecha y duración' }, { label: 'Repetir entrenamiento', icon: 'repeat', value: 'rep' }, { label: 'Guardar como rutina', icon: 'save', value: 'rt' }, { label: 'Eliminar entrenamiento', icon: 'trash', danger: true, value: 'del' }] });
           if (v === 'edit') openEditWorkout(id);
@@ -1546,6 +1562,7 @@
           <div class="muted" style="font-size:13px">Miembro desde ${new Date(st.createdAt).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</div>
           <div class="bw-chip" data-act="bw">${ic('scale')} ${bw ? fmtW(bw) : 'Añade tu peso corporal'}</div></div></div>
       ${accountCard()}
+      ${levelCard()}
       <div class="stats-row">
         <div class="stat"><div class="v">${ws.length}</div><div class="l">Entrenos</div></div>
         <div class="stat"><div class="v">${Store.streakWeeks()}<small>sem</small></div><div class="l">Racha 🔥</div></div>
@@ -1599,7 +1616,8 @@
       day: t => openWorkoutDetail(t.dataset.id),
       rename: async () => { const n = await promptM('Tu nombre', S().settings.name); if (n && n.trim()) { S().settings.name = n.trim(); save(); renderProfile(); } },
       bw: async () => { if (await askBodyweight()) renderProfile(); },
-      login: () => openAuth('login'), signup: () => openAuth('signup'), account: openAccount, photo: openAvatarPicker, logout: confirmLogout
+      login: () => openAuth('login'), signup: () => openAuth('signup'), account: openAccount, photo: openAvatarPicker, logout: confirmLogout,
+      achievements: openAchievements
     };
   }
   async function askBodyweight() {
@@ -1643,6 +1661,10 @@
           <div class="page-head"><button class="icon-btn ghost back-btn" data-act="back">${ic('back')}</button><h1>Medidas</h1><button class="btn primary sm" data-act="add">${ic('plus')} Añadir</button></div>
           <div class="chips" style="padding-top:0">${FIELDS.map(f => `<button class="chip ${L.data.f === f[0] ? 'on' : ''}" data-act="f" data-v="${f[0]}">${f[1]}</button>`).join('')}</div>
           <div class="card mt-s chart-card"><div class="chart-head"><div class="ttl"><div class="big">${latest ? (fld[0] === 'weight' ? fmtW(latest.weight) : nf(latest[fld[0]]) + ' ' + fld[2]) : '—'}</div><div class="sub">${fld[1]} · último registro</div></div></div><div class="chart-host" style="position:relative"></div></div>
+          <h2 class="section">Fotos de progreso <span class="link" data-act="addPhoto">+ Añadir foto</span></h2>
+          <div class="photo-grid" data-photos><div class="muted" style="font-size:13px">Cargando…</div></div>
+          <div class="muted" style="font-size:12px;margin-top:8px">🔒 Las fotos se guardan solo en este móvil: no se suben a la nube ni a las copias de seguridad.</div>
+          <input type="file" accept="image/*" class="hidden" data-photo-file>
           <h2 class="section">Historial</h2>
           ${ms.length ? ms.map(m => `<div class="card"><div class="row-flex"><b style="flex:1">${fmtDate(m.date)}</b><button class="icon-btn ghost" data-act="del" data-id="${m.id}">${ic('trash')}</button></div>
             <div class="tags mt-s">${FIELDS.filter(f => m[f[0]] != null && m[f[0]] !== '').map(f => `<span class="tag">${f[1]}: <b style="color:var(--text)">${f[0] === 'weight' ? fmtW(m.weight) : nf(m[f[0]]) + ' ' + f[2]}</b></span>`).join('')}</div></div>`).join('') :
@@ -1654,9 +1676,19 @@
         const data = S().measures.filter(m => m[f] != null && m[f] !== '').sort((a, b) => a.date - b.date)
           .map(m => { const v = f === 'weight' ? Store.toDisplay(m[f]) : +m[f]; return { label: shortDate(m.date), full: fmtDate(m.date), value: v, tip: nf(v) + ' ' + (f === 'weight' ? Store.unit() : FIELDS.find(x => x[0] === f)[2]) }; });
         Charts.line(el.querySelector('.chart-host'), data);
+        fillPhotos(el, L);
+        el.querySelector('[data-photo-file]').addEventListener('change', async e => {
+          const file = e.target.files[0]; if (!file) return;
+          try { const blob = await imageToPhoto(file); await PhotoDB.add({ id: Store.uid(), date: Date.now(), blob }); toast('📸 Foto guardada'); fillPhotos(L.el, L); }
+          catch (err) { toast(err.message || 'No se pudo guardar la foto'); }
+        });
       },
+      onClose: L => (L.data.urls || []).forEach(u => URL.revokeObjectURL(u)),
       actions: {
         back: (t, e, L) => L.close(),
+        addPhoto: (t, e, L) => L.el.querySelector('[data-photo-file]').click(),
+        claimPhotos: async (t, e, L) => { await PhotoDB.claim(); toast('✅ Fotos añadidas a tu cuenta (siguen solo en este móvil)'); fillPhotos(L.el, L); },
+        photo: (t, e, L) => { const list = L.data.photos || [], i = list.findIndex(p => p.id === t.dataset.id); if (i >= 0) openPhotoViewer(list, i, () => fillPhotos(L.el, L)); },
         f: (t, e, L) => { L.data.f = t.dataset.v; L.render(); },
         del: async (t, e, L) => { if (await confirmM('¿Eliminar registro?', '', 'Eliminar', true)) { S().measures = S().measures.filter(m => m.id !== t.dataset.id); save(); L.render(); } },
         add: async (t, e, L) => {
@@ -1756,7 +1788,7 @@
   function openSettings() {
     openLayer({
       html: () => {
-        const s = S().settings, snaps = Store.snapshots();
+        const s = S().settings, snaps = Store.snapshots(), rem = remCfg();
         const notifState = !('Notification' in window) ? 'No disponible en este navegador' : Notification.permission === 'denied' ? 'Bloqueadas: actívalas en los ajustes del navegador' : 'Te avisa aunque tengas la pantalla bloqueada';
         return `<div class="screen"><div class="page">
           <div class="page-head"><button class="icon-btn ghost back-btn" data-act="back">${ic('back')}</button><h1>Ajustes</h1></div>
@@ -1772,6 +1804,14 @@
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Sonido al terminar descanso</div></div><button class="toggle ${s.sound ? 'on' : ''}" data-act="tog" data-k="sound"></button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Vibración</div></div><button class="toggle ${s.vibrate ? 'on' : ''}" data-act="tog" data-k="vibrate"></button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Mantener pantalla encendida</div><div class="sr-sub">Durante el entrenamiento</div></div><button class="toggle ${s.keepAwake ? 'on' : ''}" data-act="tog" data-k="keepAwake"></button></div>
+          <h2 class="section">Recordatorios</h2>
+          <div class="setting-row"><div class="sr-main"><div class="sr-title">Recordarme entrenar</div><div class="sr-sub">Los días elegidos, si a esa hora aún no has entrenado</div></div><button class="toggle ${rem.train ? 'on' : ''}" data-act="rem" data-k="train"></button></div>
+          ${rem.train ? `<div class="rem-opts"><div class="rem-days">${'LMXJVSD'.split('').map((d, i) => `<button class="chip ${rem.days.includes(i) ? 'on' : ''}" data-act="remDay" data-d="${i}">${d}</button>`).join('')}</div>
+            <label class="rem-time">A partir de las <input class="input" type="time" data-rem="tTime" value="${rem.tTime}"></label></div>` : ''}
+          <div class="setting-row"><div class="sr-main"><div class="sr-title">Recordatorio de hipopresivos</div><div class="sr-sub">Todos los días, si aún no los has hecho</div></div><button class="toggle ${rem.hypo ? 'on' : ''}" data-act="rem" data-k="hypo"></button></div>
+          ${rem.hypo ? `<div class="rem-opts"><label class="rem-time">A partir de las <input class="input" type="time" data-rem="hTime" value="${rem.hTime}"></label></div>` : ''}
+          <div class="setting-row"><div class="sr-main"><div class="sr-title">Avisarme si llevo 3 días sin entrenar</div></div><button class="toggle ${rem.idle ? 'on' : ''}" data-act="rem" data-k="idle"></button></div>
+          <div class="muted" style="font-size:12px;line-height:1.5;margin:4px 0 6px">Los verás en Inicio al abrir la app y, si das permiso, también como notificación. En el móvil la notificación puede llegar con algo de retraso: es el sistema el que decide cuándo despierta la app.</div>
           <h2 class="section">Copias de seguridad</h2>
           <button class="sheet-opt" data-act="export">${ic('share')}<span>Guardar / compartir copia<span class="sub">${s.lastExport ? 'Última: ' + fmtDate(s.lastExport) : 'Aún no has hecho ninguna'} · a Drive, correo, WhatsApp…</span></span></button>
           <button class="sheet-opt" data-act="import">${ic('upload')}<span>Restaurar desde archivo<span class="sub">Recupera tus datos de un archivo .json</span></span></button>
@@ -1790,6 +1830,10 @@
             Versión ${Store.VERSION}<br>
             Animaciones: <a class="link" href="https://oss.exercisedb.dev" target="_blank" rel="noopener">ExerciseDB</a> · Fotos HD: <a class="link" href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a><br>${Cloud.st.user ? 'Tus datos se guardan en este móvil y en tu cuenta.' : 'Tus datos se guardan solo en este dispositivo.'}</div>
         </div></div>`;
+      },
+      onChange: e => {
+        const k = e.target.dataset.rem;
+        if (k && /^\d{2}:\d{2}$/.test(e.target.value)) { S().settings.rem = { ...remCfg(), [k]: e.target.value }; save(); syncReminders(); toast('🔔 Hora guardada'); }
       },
       bind: (el, L) => {
         el.querySelector('#imp').addEventListener('change', async e => {
@@ -1817,6 +1861,22 @@
         unit: (t, e, L) => { S().settings.unit = t.dataset.v; save(); L.render(); },
         rest: async (t, e, L) => { const v = await restSheet(S().settings.restDefault); if (v !== null) { S().settings.restDefault = v; save(); L.render(); } },
         tog: (t, e, L) => { const k = t.dataset.k; S().settings[k] = !S().settings[k]; save(); L.render(); },
+        rem: async (t, e, L) => {
+          const r = remCfg(), k = t.dataset.k; r[k] = !r[k];
+          S().settings.rem = r; save(); L.render(); syncReminders();
+          // Al activar un recordatorio se pide permiso para avisar con notificaciones
+          if (r[k] && 'Notification' in window && Notification.permission === 'default') {
+            const p = await Notification.requestPermission();
+            toast(p === 'granted' ? '🔔 Te avisaremos también con una notificación' : 'Sin permiso de notificaciones: te lo recordaremos al abrir la app');
+            lastRemSig = ''; syncReminders(); // con permiso nuevo hay que volver a registrar la revisión periódica
+          } else if (r[k]) toast('🔔 Recordatorio activado');
+        },
+        remDay: (t, e, L) => {
+          const r = remCfg(), d = +t.dataset.d;
+          r.days = r.days.includes(d) ? r.days.filter(x => x !== d) : [...r.days, d].sort();
+          if (!r.days.length) { toast('Elige al menos un día'); return; }
+          S().settings.rem = r; save(); L.render(); syncReminders();
+        },
         notify: async (t, e, L) => {
           const s = S().settings;
           if (canNotify()) { s.notify = false; save(); L.render(); return; }
@@ -2000,7 +2060,7 @@
       },
       actions: {
         close: (t, e, L) => L.close(),
-        skip: (t, e, L) => { S().settings.authSkipped = true; save(); L.close(); onboarding(); },
+        skip: (t, e, L) => { S().settings.authSkipped = true; save(); L.close(); onboarding(); handleSharedRoutine(); },
         goLogin: (t, e, L) => { L.data.mode = 'login'; L.render(); },
         goSignup: (t, e, L) => { L.data.mode = 'signup'; L.render(); },
         goReset: (t, e, L) => { L.data.mode = 'reset'; L.render(); },
@@ -2147,7 +2207,7 @@
   // Reacciona a los cambios de sesión / sincronización
   let lastPulled = 0;
   Cloud.onChange(c => {
-    if (c.user && gateOpen()) { const g = stack.find(l => l.def.id === 'auth'); if (g) g.close(true); S().settings.onboarded = true; save(); renderTab(); }
+    if (c.user && gateOpen()) { const g = stack.find(l => l.def.id === 'auth'); if (g) g.close(true); S().settings.onboarded = true; save(); renderTab(); setTimeout(handleSharedRoutine, 900); }
     // Usa tu nombre de usuario como nombre visible si aún tienes el de por defecto
     if (c.profile && c.profile.username && (!S().settings.name || S().settings.name === 'Atleta')) { S().settings.name = c.profile.username; save(); }
     if (c.user && Cloud.needsVerify() && !verifyDismissed && !stack.some(l => l.def.id === 'auth')) openVerify(false);
@@ -2164,6 +2224,378 @@
     text: '¿Quieres añadir los entrenos que hay en este dispositivo a tu cuenta, o usar solo los de tu cuenta?',
     buttons: [{ label: 'Usar solo los de mi cuenta', value: 'replace', cls: 'primary' }, { label: 'Combinar ambos', value: 'merge' }]
   }).then(v => v || 'replace'));
+
+  // =====================================================================
+  //  NIVELES Y LOGROS
+  // =====================================================================
+  const RANKS = [[1, 'Hierro', '#a3a9b0'], [5, 'Bronce', '#d08a4c'], [10, 'Plata', '#d4dbe2'], [15, 'Oro', '#ffc233'], [20, 'Platino', '#7fd3ff'], [30, 'Diamante', '#b98bff'], [40, 'Leyenda Blaze', '#ff6a00']];
+  const xpFor = n => 250 * n * (n - 1); // XP total para llegar al nivel n (500, 1500, 3000, 5000…)
+  // Todo se calcula a partir del historial (no se guarda nada aparte): así es igual en todos los móviles
+  function progressStats() {
+    return Store.cached('progress', () => {
+      const ws = S().workouts, exSet = new Set();
+      let sets = 0, vol = 0, maxVol = 0, prs = 0, long = 0, early = 0, night = 0, hyp = 0, apnea = 0;
+      ws.forEach(w => {
+        const st = Store.workoutStats(w); sets += st.sets; vol += st.volume; maxVol = Math.max(maxVol, st.volume);
+        prs += Store.workoutPRs(w).length;
+        if (st.duration >= 90 * 60) long++;
+        const h = new Date(w.start).getHours(); if (h < 7) early++; if (h >= 22) night++;
+        let isHyp = false;
+        w.exercises.forEach(e => {
+          exSet.add(e.exId);
+          const ex = Store.getEx(e.exId);
+          if (ex.hyp && !ex.kegel) { isHyp = true; e.sets.forEach(s => { if (s.done) apnea = Math.max(apnea, +s.r || 0); }); }
+        });
+        if (isHyp) hyp++;
+      });
+      // Mejor racha de semanas seguidas y semanas en las que se cumplió el objetivo
+      const perWeek = new Map(); ws.forEach(w => { const k = Store.weekKey(w.start); perWeek.set(k, (perWeek.get(k) || 0) + 1); });
+      let best = 0, run = 0, prev = null;
+      [...perWeek.keys()].sort((a, b) => a - b).forEach(k => { run = prev !== null && Store.weekKey(k - 3 * DAY) === prev ? run + 1 : 1; best = Math.max(best, run); prev = k; });
+      const goalWeeks = [...perWeek.values()].filter(n => n >= S().settings.weekGoal).length;
+      return { n: ws.length, sets, vol, maxVol, prs, long, early, night, hyp, apnea, ex: exSet.size, bestStreak: best, goalWeeks, routines: S().routines.length, measures: S().measures.length };
+    });
+  }
+  function levelInfo() {
+    const s = progressStats(), xp = s.n * 100 + s.sets * 5 + s.prs * 30 + s.goalWeeks * 150;
+    let n = 1; while (xpFor(n + 1) <= xp) n++;
+    const r = RANKS.filter(x => n >= x[0]).pop();
+    return { n, rank: r[1], color: r[2], xp, cur: xp - xpFor(n), need: xpFor(n + 1) - xpFor(n) };
+  }
+  const ACH = [
+    ['first', '🔥', 'Primer paso', 'Completa tu primer entreno', s => s.n, 1],
+    ['w10', '💪', 'Constante', 'Completa 10 entrenos', s => s.n, 10],
+    ['w50', '🏋️', 'Fijo en el gym', 'Completa 50 entrenos', s => s.n, 50],
+    ['w100', '🦾', 'Centurión', 'Completa 100 entrenos', s => s.n, 100],
+    ['w250', '👑', 'Leyenda', 'Completa 250 entrenos', s => s.n, 250],
+    ['streak4', '📅', 'Un mes sin fallar', 'Entrena 4 semanas seguidas', s => s.bestStreak, 4],
+    ['streak12', '⚡', 'Imparable', 'Entrena 12 semanas seguidas', s => s.bestStreak, 12],
+    ['goal1', '🎯', 'Objetivo cumplido', 'Cumple tu objetivo semanal', s => s.goalWeeks, 1],
+    ['goal10', '🏅', 'Disciplina de hierro', 'Cumple el objetivo 10 semanas', s => s.goalWeeks, 10],
+    ['pr1', '🥇', 'Primer récord', 'Bate tu primer récord personal', s => s.prs, 1],
+    ['pr25', '📈', 'Siempre a más', 'Consigue 25 récords personales', s => s.prs, 25],
+    ['pr100', '🚀', 'Máquina de récords', 'Consigue 100 récords personales', s => s.prs, 100],
+    ['vol10k', '🐘', 'Diez toneladas', 'Levanta 10.000 kg en un solo entreno', s => Math.round(s.maxVol), 10000],
+    ['vol100k', '🏗️', 'Cien toneladas', 'Levanta 100.000 kg en total', s => Math.round(s.vol), 100000],
+    ['vol1m', '🌋', 'Mil toneladas', 'Levanta 1.000.000 kg en total', s => Math.round(s.vol), 1000000],
+    ['sets1000', '🔁', 'Mil series', 'Completa 1.000 series', s => s.sets, 1000],
+    ['ex25', '🧭', 'Explorador', 'Prueba 25 ejercicios distintos', s => s.ex, 25],
+    ['long', '⏳', 'Maratón de hierro', 'Haz un entreno de 90 minutos o más', s => s.long, 1],
+    ['early', '🌅', 'Madrugador', 'Entrena antes de las 7:00', s => s.early, 1],
+    ['night', '🦉', 'Búho', 'Entrena después de las 22:00', s => s.night, 1],
+    ['routine', '📋', 'Planificador', 'Crea tu primera rutina', s => s.routines, 1],
+    ['measure5', '📏', 'Midiendo el cambio', 'Registra 5 mediciones', s => s.measures, 5],
+    ['hyp10', '🧘', 'Faja de acero', 'Haz 10 sesiones de hipopresivos', s => s.hyp, 10],
+    ['apnea20', '🫁', 'Pulmón de oro', 'Aguanta una apnea hipopresiva de 20 s', s => s.apnea, 20]
+  ];
+  function achievements() {
+    const s = progressStats();
+    return ACH.map(([id, icon, name, desc, f, goal]) => { const v = f(s); return { id, icon, name, desc, goal, cur: Math.min(v, goal), done: v >= goal }; });
+  }
+  const unlockedIds = () => achievements().filter(a => a.done).map(a => a.id);
+  const loc = n => Math.round(n).toLocaleString('es-ES');
+  function levelCard() {
+    const L = levelInfo(), a = achievements(), done = a.filter(x => x.done).length;
+    return `<div class="card mt tap lvl-card" data-act="achievements"><div class="row-flex"><div class="lvl-badge" style="--rc:${L.color}"><span>${L.n}</span></div>
+      <div style="flex:1;min-width:0"><div class="lvl-title">Nivel ${L.n} · <span style="color:${L.color}">${L.rank}</span></div>
+        <div class="xp-bar"><i style="width:${Math.round(L.cur / L.need * 100)}%"></i></div>
+        <div class="muted" style="font-size:12px">${loc(L.cur)} / ${loc(L.need)} XP · 🏅 ${done}/${a.length} logros</div></div>${ic('chevR')}</div></div>`;
+  }
+  function openAchievements() {
+    openLayer({
+      html: () => {
+        const L = levelInfo(), a = achievements(), done = a.filter(x => x.done).length, next = RANKS.find(r => r[0] > L.n);
+        const sorted = a.slice().sort((x, y) => (y.done - x.done) || (y.cur / y.goal - x.cur / x.goal));
+        return `<div class="screen"><div class="page">
+          <div class="page-head"><button class="icon-btn ghost back-btn" data-act="back">${ic('back')}</button><h1>Nivel y logros</h1></div>
+          <div class="card center lvl-hero"><div class="lvl-badge big" style="--rc:${L.color}"><span>${L.n}</span></div>
+            <div class="lvl-title" style="font-size:20px;margin-top:10px">Nivel ${L.n} · <span style="color:${L.color}">${L.rank}</span></div>
+            <div class="xp-bar" style="margin:12px 0 6px"><i style="width:${Math.round(L.cur / L.need * 100)}%"></i></div>
+            <div class="muted" style="font-size:13px">${loc(L.cur)} / ${loc(L.need)} XP para el nivel ${L.n + 1}${next ? ` · rango <b style="color:${next[2]}">${next[1]}</b> en el nivel ${next[0]}` : ''}</div>
+            <div class="muted" style="font-size:12px;margin-top:10px;line-height:1.5">Ganas XP con cada entreno (100), cada serie (5), cada récord (30) y cada semana que cumples tu objetivo (150).</div></div>
+          <h2 class="section">Logros · ${done}/${a.length}</h2>
+          <div class="ach-grid">${sorted.map(x => `<div class="ach ${x.done ? 'on' : ''}"><div class="ach-ic">${x.icon}</div><b>${esc(x.name)}</b><span>${esc(x.desc)}</span>
+            ${x.done ? '<em>✓ Conseguido</em>' : `<div class="ach-bar"><i style="width:${Math.round(x.cur / x.goal * 100)}%"></i></div><small>${loc(x.cur)} / ${loc(x.goal)}</small>`}</div>`).join('')}</div>
+        </div></div>`;
+      },
+      actions: { back: (t, e, L) => L.close() }
+    });
+  }
+
+  // =====================================================================
+  //  RESUMEN DE LA SEMANA / DEL MES (tarjeta en Inicio)
+  // =====================================================================
+  function summaryCard() {
+    const d = new Date(), s = S().settings, thisWk = Store.weekKey(Date.now());
+    let p = null;
+    // Los primeros días del mes: resumen del mes anterior
+    if (d.getDate() <= 4) {
+      const from = new Date(d.getFullYear(), d.getMonth() - 1, 1).getTime(), to = new Date(d.getFullYear(), d.getMonth(), 1).getTime(), key = 'm' + from;
+      if (s.sumSeenM !== key && inRange(from, to).length) p = { from, to, pFrom: new Date(d.getFullYear(), d.getMonth() - 2, 1).getTime(), pTo: from, key, title: 'Tu mes de ' + new Date(from).toLocaleDateString('es-ES', { month: 'long' }) };
+    }
+    // De lunes a miércoles: resumen de la semana pasada
+    if (!p && (d.getDay() + 6) % 7 <= 2) {
+      const from = Store.weekKey(thisWk - 3 * DAY), key = 'w' + from;
+      if (s.sumSeenW !== key && inRange(from, thisWk).length) p = { from, to: thisWk, pFrom: Store.weekKey(from - 3 * DAY), pTo: from, key, title: 'Tu semana pasada' };
+    }
+    if (!p) return '';
+    const ws = inRange(p.from, p.to), a = weekTotals(ws), b = weekTotals(inRange(p.pFrom, p.pTo));
+    const prs = ws.reduce((n, w) => n + Store.workoutPRs(w).length, 0);
+    const top = groupSets(BodyMap.scoresFromWorkouts(ws, Store.getEx)).sort((x, y) => y[1] - x[1])[0];
+    const isW = p.key[0] === 'w';
+    const extra = [prs ? `🏆 <b>${prs} récord${prs > 1 ? 's' : ''}</b>` : '', top && top[1] > 0 ? `Más trabajado: <b>${top[0]}</b>` : '',
+      isW ? (a.n >= s.weekGoal ? '🎯 <b>Objetivo cumplido</b>' : `🎯 Objetivo: <b>${a.n}/${s.weekGoal}</b>`) : ''].filter(Boolean).join(' · ');
+    return `<div class="card mt sum-card"><div class="row-flex"><b style="flex:1;font-size:16px">📊 ${cap(p.title)}</b><button class="icon-btn ghost" data-act="sumClose" data-k="${p.key}" title="Cerrar">${ic('close')}</button></div>
+      <div class="wk-grid mt-s">
+        <div><span class="l">Entrenos</span><b>${a.n}</b>${delta(a.n, b.n)}</div>
+        <div><span class="l">Volumen</span><b>${fmtVol(a.v)}</b>${delta(a.v, b.v)}</div>
+        <div><span class="l">Series</span><b>${a.s}</b>${delta(a.s, b.s)}</div>
+        <div><span class="l">Tiempo</span><b>${fmtDur(a.d)}</b>${delta(a.d, b.d)}</div></div>
+      ${extra ? `<div class="sum-extra">${extra}</div>` : ''}
+      <div class="muted" style="font-size:11px;margin-top:6px">Comparado con ${isW ? 'la semana' : 'el mes'} anterior</div></div>`;
+  }
+
+  // =====================================================================
+  //  FOTOS DE PROGRESO (solo en este móvil, en IndexedDB: no ocupan el almacenamiento de los datos)
+  // =====================================================================
+  const PhotoDB = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      const r = indexedDB.open('ironblaze-photos', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('photos', { keyPath: 'id' });
+      r.onsuccess = () => res(r.result); r.onerror = () => { dbp = null; rej(r.error); };
+    }));
+    const run = async (mode, fn) => {
+      const db = await open();
+      return new Promise((res, rej) => { const t = db.transaction('photos', mode), q = fn(t.objectStore('photos')); t.oncomplete = () => res(q && q.result); t.onerror = () => rej(t.error); });
+    };
+    // Cada foto es de quien la hizo: otra cuenta en este móvil no ve las tuyas
+    const owner = () => (Cloud.st.user && Cloud.st.user.uid) || 'local';
+    return {
+      async all() {
+        const me = owner(), list = (await run('readonly', st => st.getAll())) || [];
+        return list.filter(p => p.owner === me).sort((a, b) => b.date - a.date);
+      },
+      // Fotos hechas sin cuenta: con sesión iniciada no se muestran salvo que el usuario diga que son suyas
+      async orphans() { return owner() === 'local' ? 0 : ((await run('readonly', st => st.getAll())) || []).filter(p => p.owner === 'local').length; },
+      async claim() { const me = owner(); for (const p of ((await run('readonly', st => st.getAll())) || []).filter(p => p.owner === 'local')) { p.owner = me; await run('readwrite', st => st.put(p)); } },
+      add: p => run('readwrite', st => st.put({ ...p, owner: owner() })),
+      del: id => run('readwrite', st => st.delete(id))
+    };
+  })();
+  function imageToPhoto(file, max = 1080) {
+    return new Promise((res, rej) => {
+      const url = URL.createObjectURL(file), img = new Image();
+      img.onload = () => {
+        const k = Math.min(1, max / Math.max(img.width, img.height)), c = document.createElement('canvas');
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+        c.toBlob(b => b ? res(b) : rej(new Error('No se pudo procesar la foto')), 'image/jpeg', 0.85);
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('No se pudo leer la imagen')); };
+      img.src = url;
+    });
+  }
+  // Rellena la cuadrícula de fotos de la pantalla de Medidas
+  async function fillPhotos(el, L) {
+    const host = el.querySelector('[data-photos]'); if (!host) return;
+    // Si se piden varias cargas seguidas solo pinta la última (y no deja imágenes sin liberar)
+    const tok = L.data.ptok = (L.data.ptok || 0) + 1;
+    let ps, orphans = 0;
+    try { ps = await PhotoDB.all(); orphans = await PhotoDB.orphans(); } catch (e) { if (tok === L.data.ptok) host.innerHTML = '<div class="muted" style="font-size:13px">Este navegador no permite guardar fotos.</div>'; return; }
+    if (tok !== L.data.ptok || !host.isConnected) return;
+    (L.data.urls || []).forEach(u => URL.revokeObjectURL(u)); L.data.urls = [];
+    L.data.photos = ps;
+    host.innerHTML = (ps.length ? ps.map(p => { const u = URL.createObjectURL(p.blob); L.data.urls.push(u); return `<button class="photo-th" data-act="photo" data-id="${esc(p.id)}"><img src="${u}" alt=""><span>${shortDate(p.date)}</span></button>`; }).join('')
+      : `<button class="photo-empty" data-act="addPhoto">📸<span>Haz tu primera foto y compara tu cambio con el tiempo</span></button>`) +
+      (orphans ? `<div class="photo-claim"><span>Hay ${orphans} foto${orphans > 1 ? 's' : ''} hecha${orphans > 1 ? 's' : ''} en este móvil sin cuenta. ¿Son tuyas?</span><button class="btn sm" data-act="claimPhotos">Añadirlas</button></div>` : '');
+  }
+  function openPhotoViewer(list, idx, onChange) {
+    const p = list[idx], url = URL.createObjectURL(p.blob);
+    openLayer({
+      transient: true,
+      html: () => `<div class="screen photo-view"><div class="pv-head"><button class="icon-btn ghost" data-act="x">${ic('close')}</button><b>${fmtDate(p.date)}</b><button class="icon-btn ghost" data-act="del">${ic('trash')}</button></div>
+        <div class="pv-img"><img src="${url}" alt=""></div>
+        ${list.length > 1 ? `<div class="pv-foot"><button class="btn primary block" data-act="cmp">${ic('swap')} Comparar con otra foto</button></div>` : ''}</div>`,
+      onClose: () => URL.revokeObjectURL(url),
+      actions: {
+        x: (t, e, L) => L.close(),
+        del: async (t, e, L) => { if (await confirmM('¿Eliminar foto?', 'Se borrará de este móvil.', 'Eliminar', true)) { await PhotoDB.del(p.id); L.close(); onChange(); toast('Foto eliminada'); } },
+        cmp: async () => {
+          const others = list.filter(x => x.id !== p.id);
+          const v = await sheet({ title: 'Comparar con…', options: others.map(o => ({ label: fmtDate(o.date), value: o.id })) });
+          if (v) openPhotoCompare(p, others.find(o => o.id === v));
+        }
+      }
+    });
+  }
+  function openPhotoCompare(a, b) {
+    const [older, newer] = a.date < b.date ? [a, b] : [b, a];
+    const ua = URL.createObjectURL(older.blob), ub = URL.createObjectURL(newer.blob), days = Math.round((newer.date - older.date) / DAY);
+    openLayer({
+      transient: true,
+      html: () => `<div class="screen photo-view"><div class="pv-head"><button class="icon-btn ghost" data-act="x">${ic('close')}</button><b>${days ? `${days} día${days === 1 ? '' : 's'} de diferencia` : 'Mismo día'}</b><span style="width:40px"></span></div>
+        <div class="pv-cmp"><figure><img src="${ua}" alt=""><figcaption>Antes · ${shortDate(older.date)}</figcaption></figure><figure><img src="${ub}" alt=""><figcaption>Después · ${shortDate(newer.date)}</figcaption></figure></div></div>`,
+      onClose: () => { URL.revokeObjectURL(ua); URL.revokeObjectURL(ub); },
+      actions: { x: (t, e, L) => L.close() }
+    });
+  }
+
+  // =====================================================================
+  //  RECORDATORIOS
+  //  Se ven al abrir la app y, si das permiso, como notificación: el service worker los revisa
+  //  periódicamente (Periodic Background Sync de Chrome/Android; el sistema decide la frecuencia).
+  // =====================================================================
+  const remCfg = () => Object.assign({ train: false, days: [0, 2, 4], tTime: '18:00', hypo: false, hTime: '10:00', idle: false }, S().settings.rem || {});
+  const minutesOf = s => { const [h, m] = String(s || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+  const lastWorkoutTs = () => S().workouts.reduce((m, w) => Math.max(m, w.start), 0);
+  const lastHypoTs = () => S().workouts.reduce((m, w) => w.exercises.some(e => { const x = Store.getEx(e.exId); return x.hyp && !x.kegel; }) ? Math.max(m, w.start) : m, 0);
+  function dueReminders() {
+    const r = remCfg(), out = [];
+    if (S().active) return out;
+    const now = new Date(), today = new Date().setHours(0, 0, 0, 0), dow = (now.getDay() + 6) % 7, hm = now.getHours() * 60 + now.getMinutes(), last = lastWorkoutTs();
+    if (r.train && r.days.includes(dow) && hm >= minutesOf(r.tTime) && last < today) out.push('train');
+    if (r.hypo && hm >= minutesOf(r.hTime) && lastHypoTs() < today) out.push('hypo');
+    if (r.idle && last && Date.now() - last >= 3 * DAY && !out.includes('train')) out.push('idle');
+    return out;
+  }
+  function reminderCards() {
+    const d = dueReminders(); if (!d.length) return '';
+    const days = Math.floor((Date.now() - lastWorkoutTs()) / DAY);
+    return `<div class="mt">${d.map(k => k === 'train'
+      ? `<div class="insight rem"><span class="ins-ic">🔔</span><span style="flex:1"><b>Hoy toca entrenar</b><br>Tu objetivo: ${S().settings.weekGoal} entrenos por semana.</span><button class="btn sm primary" data-act="quick">Empezar</button></div>`
+      : k === 'hypo'
+        ? `<div class="insight rem"><span class="ins-ic">🧘</span><span style="flex:1"><b>Tus hipopresivos de hoy</b><br>Con 10 minutos es suficiente.</span><button class="btn sm primary" data-act="hypoStart">Empezar</button></div>`
+        : `<div class="insight rem warn"><span class="ins-ic">⏰</span><span style="flex:1"><b>Llevas ${days} días sin entrenar</b><br>¡Vuelve hoy, aunque sea un entreno corto!</span><button class="btn sm primary" data-act="quick">Empezar</button></div>`).join('')}</div>`;
+  }
+  function startHypoSession() {
+    const prog = Store.PROGRAMS.find(p => p.routines.some(r => r.exercises.some(e => e.exId.startsWith('hyp_'))));
+    const r = prog && (prog.routines.find(x => /corta/i.test(x.name)) || prog.routines[0]);
+    if (r) startWorkout(JSON.parse(JSON.stringify(r)));
+  }
+  // Pasa la configuración al service worker (a través de la caché) y activa/desactiva la revisión periódica
+  let remT = null, lastRemSig = '';
+  const queueRemSync = () => { clearTimeout(remT); remT = setTimeout(syncReminders, 1500); };
+  async function syncReminders() {
+    try {
+      if (!('caches' in window)) return;
+      const r = remCfg(), any = r.train || r.hypo || r.idle;
+      // Solo se escribe si algo ha cambiado (Inicio se repinta a menudo)
+      const sig = JSON.stringify([r, lastWorkoutTs(), lastHypoTs(), !!S().active]);
+      if (sig === lastRemSig) return; lastRemSig = sig;
+      const c = await caches.open('ironblaze-cfg');
+      const old = await c.match('reminders').then(x => x && x.json()).catch(() => null);
+      const cfg = { ...r, lastTrain: lastWorkoutTs(), lastHypo: lastHypoTs(), active: !!S().active, sent: (old && old.sent) || {} };
+      await c.put('reminders', new Response(JSON.stringify(cfg), { headers: { 'Content-Type': 'application/json' } }));
+      if (swReg && swReg.periodicSync) {
+        if (any) {
+          let ok = true;
+          try { ok = (await navigator.permissions.query({ name: 'periodic-background-sync' })).state === 'granted'; } catch (e) { }
+          if (ok) await swReg.periodicSync.register('ib-reminders', { minInterval: 60 * 60e3 });
+        } else await swReg.periodicSync.unregister('ib-reminders');
+      }
+    } catch (e) { }
+  }
+
+  // =====================================================================
+  //  COMPARTIR: entreno como imagen y rutina por enlace
+  // =====================================================================
+  function rr(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+  function fitText(g, t, max) { t = String(t); if (g.measureText(t).width <= max) return t; while (t.length > 1 && g.measureText(t + '…').width > max) t = t.slice(0, -1); return t + '…'; }
+  async function shareFile(blob, name, title) {
+    const file = new File([blob], name, { type: blob.type });
+    try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title }); return; } }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('✅ Imagen descargada');
+  }
+  async function shareWorkoutImage(id) {
+    const w = S().workouts.find(x => x.id === id); if (!w) return;
+    toast('Preparando imagen…');
+    try { await Promise.all([document.fonts.load('64px Anton'), document.fonts.load('800 40px Inter'), document.fonts.load('600 26px Inter')]); } catch (e) { }
+    const W = 1080, H = 1350, c = document.createElement('canvas'); c.width = W; c.height = H;
+    const g = c.getContext('2d'), F = (wt, px) => `${wt} ${px}px Inter, system-ui, sans-serif`;
+    g.fillStyle = '#0a0a0a'; g.fillRect(0, 0, W, H);
+    const glow = g.createRadialGradient(W / 2, -80, 40, W / 2, -80, 950); glow.addColorStop(0, 'rgba(255,106,0,.5)'); glow.addColorStop(1, 'rgba(255,106,0,0)');
+    g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    const logo = await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = 'icons/logo-256.png'; });
+    if (logo) { g.save(); rr(g, 70, 64, 110, 110, 26); g.clip(); g.drawImage(logo, 70, 64, 110, 110); g.restore(); }
+    g.textBaseline = 'middle'; g.font = '64px Anton, Impact, sans-serif';
+    g.fillStyle = '#fff'; g.fillText('IRON', 204, 122); g.fillStyle = '#ff6a00'; g.fillText('BLAZE', 204 + g.measureText('IRON').width, 122);
+    g.textBaseline = 'alphabetic';
+    g.fillStyle = '#fff'; g.font = F(800, 62); g.fillText(fitText(g, w.title, W - 140), 70, 290);
+    g.fillStyle = '#b3b3b3'; g.font = F(500, 32); g.fillText(fitText(g, `${S().settings.name} · ${new Date(w.start).toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`, W - 140), 70, 342);
+    const st = Store.workoutStats(w), prs = Store.workoutPRs(w), prSet = new Set(prs.map(p => p.exId));
+    const stats = [['Duración', fmtDur(st.duration)], ['Volumen', fmtVol(st.volume)], ['Series', String(st.sets)], ['Récords', String(prs.length)]];
+    const bw = (W - 140 - 60) / 4;
+    stats.forEach(([l, v], i) => {
+      const x = 70 + i * (bw + 20), y = 390;
+      g.fillStyle = '#171717'; rr(g, x, y, bw, 140, 24); g.fill();
+      g.fillStyle = '#8a8a8a'; g.font = F(600, 24); g.fillText(l.toUpperCase(), x + 22, y + 48);
+      g.fillStyle = i === 3 && prs.length ? '#ffc233' : '#fff'; g.font = F(800, 38); g.fillText(fitText(g, v, bw - 36), x + 22, y + 104);
+    });
+    g.fillStyle = '#ff6a00'; g.font = F(800, 26); g.fillText('EJERCICIOS', 70, 600);
+    const list = w.exercises.slice(0, w.exercises.length > 7 ? 6 : 7); // si hay más, deja sitio a la línea "+N más"
+    list.forEach((e, i) => {
+      const ex = Store.getEx(e.exId), k = Store.kind(ex), work = e.sets.filter(s => s.type !== 'w');
+      const score = s => (k === 'weight' || k === 'bw') && +s.w ? Store.e1rm(+s.w, +s.r) : k === 'cardio' ? +s.w || +s.r : +s.r || 0;
+      const best = (work.length ? work : e.sets).reduce((b, s) => score(s) > score(b) ? s : b);
+      const y = 628 + i * 92;
+      g.fillStyle = '#141414'; rr(g, 70, y, W - 140, 78, 18); g.fill();
+      g.fillStyle = '#fff'; g.font = F(700, 30); g.fillText(fitText(g, ex.n, W - 140 - 400), 98, y + 49);
+      g.fillStyle = prSet.has(e.exId) ? '#ffc233' : '#b3b3b3'; g.font = F(600, 26); g.textAlign = 'right';
+      g.fillText(`${prSet.has(e.exId) ? '🏆 ' : ''}${e.sets.length} serie${e.sets.length === 1 ? '' : 's'} · ${best ? setText(k, best) : ''}`, W - 98, y + 49); g.textAlign = 'left';
+    });
+    if (w.exercises.length > list.length) { g.fillStyle = '#8a8a8a'; g.font = F(600, 26); g.fillText(`+ ${w.exercises.length - list.length} ejercicio${w.exercises.length - list.length > 1 ? 's' : ''} más`, 70, 628 + list.length * 92 + 36); }
+    g.textAlign = 'center'; g.fillStyle = '#8a8a8a'; g.font = F(600, 28); g.fillText('Entrenado con IRONBLAZE 🔥', W / 2, H - 70); g.textAlign = 'left';
+    const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+    if (blob) await shareFile(blob, 'ironblaze-entreno.png', w.title); else toast('No se pudo crear la imagen');
+  }
+  // Rutina → enlace (la rutina va dentro del propio enlace: no se sube a ningún sitio)
+  const b64e = s => { const b = new TextEncoder().encode(s); let bin = ''; b.forEach(x => bin += String.fromCharCode(x)); return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const b64d = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/')), ch => ch.charCodeAt(0)));
+  async function shareRoutine(r) {
+    const custom = S().custom.filter(c => r.exercises.some(e => e.exId === c.i));
+    const payload = { v: 1, r: { name: r.name, exercises: r.exercises.map(e => ({ exId: e.exId, rest: e.rest ?? null, ss: e.ss || null, sets: e.sets.map(s => ({ type: s.type, w: s.w, r: s.r })) })) }, c: custom };
+    const url = location.origin + location.pathname.replace(/index\.html$/, '') + '#rutina=' + b64e(JSON.stringify(payload));
+    const text = `Te paso mi rutina "${r.name}" de IRONBLAZE 💪`;
+    try { if (navigator.share) { await navigator.share({ title: r.name, text, url }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('🔗 Enlace copiado: pégalo en WhatsApp o donde quieras'); }
+    catch (e) { await promptM('Copia este enlace', url); }
+  }
+  let importing = false;
+  async function handleSharedRoutine() {
+    const m = location.hash.match(/^#rutina=([\w-]+)/); if (!m || importing) return;
+    // Con la pantalla de acceso abierta se espera a que entres (o elijas seguir sin cuenta): si no, la rutina
+    // podría borrarse al elegir "usar solo los datos de mi cuenta"
+    if (gateOpen()) return;
+    history.replaceState(history.state, '', location.pathname + location.search);
+    let data; try { data = JSON.parse(b64d(m[1])); } catch (e) { toast('El enlace de la rutina no es válido'); return; }
+    // Se limpia igual que una copia importada: nada de lo que venga en el enlace puede colar código
+    const clean = Store.sanitizeState({ workouts: [], routines: [data && data.r], custom: (data && Array.isArray(data.c)) ? data.c.slice(0, 30) : [], measures: [], settings: {} });
+    const r = clean.routines[0], customs = clean.custom;
+    const known = id => customs.some(c => c.i === id) || Store.getEx(id).n !== 'Ejercicio eliminado';
+    r.exercises = r.exercises.filter(e => known(e.exId));
+    if (!r.exercises.length) { toast('El enlace de la rutina no es válido'); return; }
+    const nameOf = id => (customs.find(c => c.i === id) || Store.getEx(id)).n;
+    importing = true;
+    const v = await modal({
+      title: '📥 Te han compartido una rutina', text: `<b>${esc(r.name || 'Rutina compartida')}</b> · ${r.exercises.length} ejercicio${r.exercises.length > 1 ? 's' : ''}`,
+      html: `<div class="share-list">${r.exercises.map(e => `<div>${esc(nameOf(e.exId))} <span class="muted">· ${e.sets.length} series</span></div>`).join('')}</div>`,
+      buttons: [{ label: 'Cancelar', value: null }, { label: 'Añadir a mis rutinas', value: 'add', cls: 'primary' }]
+    });
+    importing = false;
+    if (v !== 'add') return;
+    // Si ya la tienes (mismo nombre y mismos ejercicios), pregunta antes de duplicarla
+    const sig = x => JSON.stringify(x.exercises.map(e => [e.exId, e.sets.length]));
+    if (S().routines.some(x => x.name === (r.name || 'Rutina compartida') && sig(x) === sig(r)) && !await confirmM('Ya tienes esta rutina', 'Ya está en tus rutinas. ¿Quieres añadirla otra vez?', 'Añadir otra vez')) return;
+    customs.forEach(c => { if (!S().custom.some(x => x.i === c.i)) S().custom.unshift(c); });
+    Store.indexExercises(); hayCache.clear();
+    r.id = Store.uid(); r.name = r.name || 'Rutina compartida'; r.folder = 'Compartidas';
+    S().routines.push(r); save(); toast('✅ Rutina añadida a "Compartidas"');
+    if (!gateOpen()) { closeAll(); tab = 'workout'; renderTab(true); }
+  }
+  window.addEventListener('hashchange', handleSharedRoutine);
 
   // ---------------- Datos de ejemplo ----------------
   function seedDemo() {
@@ -2272,5 +2704,5 @@
   // con sesión, se ve el logo de carga hasta que Firebase confirma y luego la app.
   if (Cloud.st.configured && !S().settings.authSkipped && !localStorage.getItem('ib.session')) { openAuth('login', { gate: true }); hideSplash(); }
   else if (!Cloud.st.configured) hideSplash();
-  Cloud.init().finally(startup);
+  Cloud.init().finally(() => { startup(); handleSharedRoutine(); });
 })();

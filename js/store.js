@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.6.1';
+  const VERSION = '1.7.0';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -95,8 +95,17 @@
     return Object.assign(s, {
       name: str(s.name, 40) || d.name, unit: s.unit === 'lbs' ? 'lbs' : 'kg', restDefault: Math.max(0, Math.min(3600, +s.restDefault || 0)),
       weekGoal: Math.max(1, Math.min(7, parseInt(s.weekGoal) || 4)), bodyweight: num(s.bodyweight), avatar: sanitizeAvatar(s.avatar),
-      lastExport: +s.lastExport || 0, sound: !!s.sound, vibrate: !!s.vibrate, keepAwake: !!s.keepAwake, notify: !!s.notify, backupReminder: !!s.backupReminder
+      lastExport: +s.lastExport || 0, sound: !!s.sound, vibrate: !!s.vibrate, keepAwake: !!s.keepAwake, notify: !!s.notify, backupReminder: !!s.backupReminder,
+      // Logros ya vistos, resúmenes cerrados y recordatorios
+      achSeen: Array.isArray(s.achSeen) ? s.achSeen.filter(x => typeof x === 'string').slice(0, 200).map(x => ident(x)) : undefined,
+      sumSeenW: str(s.sumSeenW, 20), sumSeenM: str(s.sumSeenM, 20), rem: sanitizeRem(s.rem)
     });
+  }
+  function sanitizeRem(r) {
+    if (!r || typeof r !== 'object') return undefined;
+    const time = (t, def) => /^([01]\d|2[0-3]):[0-5]\d$/.test(t) ? t : def;
+    const days = arr(r.days).map(x => parseInt(x)).filter(x => x >= 0 && x <= 6);
+    return { train: !!r.train, days: days.length ? [...new Set(days)] : [0, 2, 4], tTime: time(r.tTime, '18:00'), hypo: !!r.hypo, hTime: time(r.hTime, '10:00'), idle: !!r.idle };
   }
   function sanitizeState(st) {
     st.workouts = arr(st.workouts).map(w => sanitizeWorkout(w));
@@ -162,7 +171,7 @@
   // Vacía los datos de la cuenta en este dispositivo (al cerrar sesión o entrar con otra cuenta).
   // Borra entrenos, rutinas y el perfil (nombre, foto, peso…); conserva las preferencias del móvil
   // (sonido, vibración, avisos, pantalla encendida).
-  const ACCOUNT_SETTINGS = ['name', 'unit', 'restDefault', 'weekGoal', 'bodyweight', 'avatar', 'lastExport'];
+  const ACCOUNT_SETTINGS = ['name', 'unit', 'restDefault', 'weekGoal', 'bodyweight', 'avatar', 'lastExport', 'achSeen', 'sumSeenW', 'sumSeenM'];
   function replaceWithEmpty() {
     const d = defaults();
     state.workouts = []; state.routines = []; state.custom = []; state.measures = []; state.active = null; state.createdAt = d.createdAt;
