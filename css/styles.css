@@ -583,9 +583,9 @@ h2.section .mini-seg { text-transform: none; letter-spacing: 0; }
 .acc-card .ins-ic { font-size: 22px; }
 .modal.center { text-align: center; }
 .screen.still { animation: none; }
-#splash { position: absolute; inset: 0; z-index: 150; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; transition: opacity .3s; }
+#splash { position: absolute; inset: 0; z-index: 150; background: var(--bg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; transition: opacity .2s; }
 #splash.out { opacity: 0; pointer-events: none; }
-#splash .sp-logo { width: 120px; height: 120px; border-radius: 28px; filter: drop-shadow(0 0 22px var(--orange-glow)); animation: bounce .8s ease-out; }
+#splash .sp-logo { width: 120px; height: 120px; border-radius: 28px; filter: drop-shadow(0 0 22px var(--orange-glow)); }
 #splash .sp-brand { font-family: var(--display); font-size: 40px; letter-spacing: 1.5px; }
 #splash .sp-brand b { color: var(--orange); font-weight: 400; }
 #splash .sp-bar { width: 120px; height: 3px; background: var(--line); border-radius: 3px; overflow: hidden; margin-top: 14px; }
