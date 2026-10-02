@@ -8,6 +8,7 @@ window.BodyMap = (function () {
     triceps: ['triceps'],
     forearms: ['forearms'], 'wrist flexors': ['forearms'], 'wrist extensors': ['forearms'], wrists: ['forearms'], 'grip muscles': ['forearms'], hands: ['forearms'],
     abs: ['abs'], abdominals: ['abs'], 'lower abs': ['abs'], core: ['abs', 'obliques'], 'serratus anterior': ['obliques'], obliques: ['obliques'],
+    'transverse abdominis': ['abs'], 'pelvic floor': ['abs'],
     quads: ['quads'], quadriceps: ['quads'], 'hip flexors': ['quads'],
     adductors: ['adductors'], 'inner thighs': ['adductors'], groin: ['adductors'],
     abductors: ['glutes'], glutes: ['glutes'],

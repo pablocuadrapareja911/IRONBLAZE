@@ -3,7 +3,7 @@ window.I18N = {
   bodyParts: {
     'back': 'Espalda', 'cardio': 'Cardio', 'chest': 'Pecho', 'lower arms': 'Antebrazos',
     'lower legs': 'Gemelos', 'neck': 'Cuello', 'shoulders': 'Hombros', 'upper arms': 'Brazos',
-    'upper legs': 'Piernas', 'waist': 'Core', 'full body': 'Cuerpo completo', 'other': 'Otro'
+    'upper legs': 'Piernas', 'waist': 'Core', 'hypopressive': 'Hipopresivos', 'full body': 'Cuerpo completo', 'other': 'Otro'
   },
   equipment: {
     'assisted': 'Asistido', 'band': 'Banda', 'barbell': 'Barra', 'body weight': 'Peso corporal',
@@ -31,7 +31,8 @@ window.I18N = {
     'rear deltoids': 'Deltoides posterior', 'rhomboids': 'Romboides', 'rotator cuff': 'Manguito rotador',
     'shins': 'Tibiales', 'shoulders': 'Hombros', 'soleus': 'Sóleo', 'sternocleidomastoid': 'Esternocleidomastoideo',
     'upper chest': 'Pecho superior', 'wrist extensors': 'Extensores de muñeca', 'wrist flexors': 'Flexores de muñeca',
-    'wrists': 'Muñecas', 'neck': 'Cuello'
+    'wrists': 'Muñecas', 'neck': 'Cuello',
+    'transverse abdominis': 'Transverso abdominal', 'pelvic floor': 'Suelo pélvico'
   }
 };
 window.tr = (group, key) => (window.I18N[group] && window.I18N[group][key]) || (key ? key.charAt(0).toUpperCase() + key.slice(1) : '');

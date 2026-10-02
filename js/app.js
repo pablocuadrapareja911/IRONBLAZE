@@ -111,6 +111,7 @@
   const parseVal = (k, v) => v === '' || isNaN(parseFloat(v)) ? '' : (k === 'cardio' ? parseFloat(v) : Store.fromDisplay(v));
 
   function thumb(ex, cls = '') {
+    if (ex.hyp) return `<div class="thumb hyp ${cls}">${HYPO.svg(ex.pose, { mini: true })}</div>`;
     if (ex.custom) return `<div class="thumb custom ${cls}">${esc(ex.n.charAt(0).toUpperCase())}</div>`;
     return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" decoding="async" data-rm-err></div>`;
   }
@@ -677,11 +678,11 @@
         <input class="title-input" data-f="name" placeholder="Nombre de la rutina" value="${esc(draft.name)}">
         <div class="mt">${draft.exercises.map((e, ei) => {
           const ex = Store.getEx(e.exId), k = Store.kind(ex), c = cols(k), ss = e.ss && ssm[e.ss];
-          return `<div class="re-ex ${ss ? 'in-ss' : ''}" ${ss ? `style="--ss:${ss.color}"` : ''}>
+          return `<div class="re-ex ${ss ? 'in-ss' : ''} ${ex.hyp ? 'no-w' : ''}" ${ss ? `style="--ss:${ss.color}"` : ''}>
             ${ssTag(ss)}
             <div class="re-head">${thumb(ex, 'sm')}<div class="nm" data-act="info" data-e="${ei}">${esc(ex.n)}</div><button class="icon-btn ghost" data-act="exMenu" data-e="${ei}">${ic('more')}</button></div>
             <button class="aw-rest" data-act="rest" data-e="${ei}">${ic('clock')} Descanso: ${fmtRest(e.rest ?? S().settings.restDefault)}</button>
-            <div class="re-set head"><span>SERIE</span><span>${c[0]}</span><span>${c[1]}</span><span></span></div>
+            <div class="re-set head"><span>SERIE</span><span>${ex.hyp ? '' : c[0]}</span><span>${c[1]}</span><span></span></div>
             ${e.sets.map((s, si) => `<div class="re-set"><button class="set-num ${s.type}" data-act="type" data-e="${ei}" data-s="${si}">${typeLabel[s.type] || e.sets.slice(0, si + 1).filter(x => x.type === 'n' || x.type === 'f').length}</button>
               <input class="set-in" inputmode="decimal" type="number" step="any" data-f="w" data-e="${ei}" data-s="${si}" value="${dispVal(k, s.w)}" placeholder="—">
               <input class="set-in" inputmode="numeric" type="number" step="any" data-f="r" data-e="${ei}" data-s="${si}" value="${s.r}" placeholder="—">
@@ -748,9 +749,10 @@
   // =====================================================================
   //  SELECTOR / BIBLIOTECA DE EJERCICIOS
   // =====================================================================
-  const BODY_PARTS = ['chest', 'back', 'shoulders', 'upper arms', 'lower arms', 'upper legs', 'lower legs', 'waist', 'cardio', 'neck'];
+  const BODY_PARTS = ['chest', 'back', 'shoulders', 'upper arms', 'lower arms', 'upper legs', 'lower legs', 'waist', 'hypopressive', 'cardio', 'neck'];
   const EQUIP = [...new Set(window.EXERCISE_DB.flatMap(e => e.q))].sort((a, b) => tr('equipment', a).localeCompare(tr('equipment', b)));
-  const POPULAR = new Set(Store.PROGRAMS.flatMap(p => p.routines.flatMap(r => r.exercises.map(e => e.exId))));
+  // (los hipopresivos tienen su propio filtro: no se cuelan al principio de la lista general)
+  const POPULAR = new Set(Store.PROGRAMS.flatMap(p => p.routines.flatMap(r => r.exercises.map(e => e.exId))).filter(id => !id.startsWith('hyp_')));
   const ES_EN = [
     ['press de banca', 'bench press'], ['press banca', 'bench press'], ['banca', 'bench'], ['press militar', 'military press'], ['press frances', 'lying triceps extension'],
     ['peso muerto rumano', 'romanian deadlift'], ['peso muerto', 'deadlift'], ['sentadillas', 'squat'], ['sentadilla', 'squat'], ['dominadas', 'pull'], ['dominada', 'pull'],
@@ -810,7 +812,7 @@
       const sel = opts.selected && opts.selected.has(e.i), n = usage.get(e.i);
       if (f.view === 'grid') {
         return `<div class="ex-card ${sel ? 'selected' : ''}" data-id="${e.i}">
-          <div class="ex-card-media">${e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err>`}
+          <div class="ex-card-media">${e.hyp ? HYPO.svg(e.pose, { mini: true }) : e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err>`}
             ${Store.HD(e.i) ? '<span class="hd-badge">HD</span>' : ''}
             ${opts.selectable ? `<div class="check-dot">${sel ? ic('check') : ''}</div>` : ''}</div>
           <div class="ex-card-body"><div class="ex-card-name">${esc(e.n)}</div><div class="ex-card-sub">${exSub(e)}${n ? ` · <span style="color:var(--orange)">${n}×</span>` : ''}</div></div></div>`;
@@ -956,7 +958,7 @@
     const ex = Store.getEx(id), k = Store.kind(ex);
     const enName = ex.en || ex.n;
     const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent('how to ' + enName + ' proper form')}`;
-    const ytEs = `https://www.youtube.com/results?search_query=${encodeURIComponent('cómo hacer ' + (ex.es ? ex.n : enName) + ' técnica')}`;
+    const ytEs = `https://www.youtube.com/results?search_query=${encodeURIComponent(ex.yt || 'cómo hacer ' + (ex.es ? ex.n : enName) + ' técnica')}`;
     const trUrl = `https://translate.google.com/?sl=en&tl=es&op=translate&text=${encodeURIComponent(ex.x.join('\n'))}`;
     openLayer({
       data: { tab: 'sum', metric: k === 'weight' || k === 'bw' ? 'e1rm' : 'r', media: 'hd' },
@@ -965,14 +967,14 @@
         let body = '';
         const hd = Store.HD(ex.i), mode = hd ? L.data.media : 'gif';
         if (t === 'sum') body = `
-          ${ex.custom ? `<div class="ex-media" style="background:var(--card)"><div style="font-size:80px;color:var(--orange);font-weight:800">${esc(ex.n.charAt(0).toUpperCase())}</div></div>` :
+          ${ex.hyp ? `<div class="ex-media hypo">${HYPO.svg(ex.pose, { anim: true })}</div>` : ex.custom ? `<div class="ex-media" style="background:var(--card)"><div style="font-size:80px;color:var(--orange);font-weight:800">${esc(ex.n.charAt(0).toUpperCase())}</div></div>` :
             mode === 'hd' ? `<div class="ex-media hd"><span class="loading">Cargando fotos HD…</span>
                 <img class="f0" src="${hd[0]}" alt="${esc(ex.n)}" data-media>${hd[1] ? `<img class="f1" src="${hd[1]}" alt="">` : ''}
                 <span class="media-badge">HD · INICIO ⇄ FINAL</span></div>` :
             `<div class="ex-media gif"><span class="loading">Cargando animación…</span><img src="${Store.GIF(ex.i)}" alt="${esc(ex.n)}" data-media><span class="media-badge">▶ ANIMACIÓN</span></div>`}
           ${hd && !ex.custom ? `<div class="seg mt-s"><button class="${mode === 'hd' ? 'on' : ''}" data-act="media" data-v="hd">📷 Fotos HD</button><button class="${mode === 'gif' ? 'on' : ''}" data-act="media" data-v="gif">▶ Animación</button></div>` : ''}
           <div class="ex-title">${esc(ex.n)}</div>
-          ${ex.es ? `<div class="muted" style="font-size:13px;margin:-4px 0 8px">${esc(cap(ex.en))}</div>` : ''}
+          ${ex.es && !ex.hyp ? `<div class="muted" style="font-size:13px;margin:-4px 0 8px">${esc(cap(ex.en))}</div>` : ''}
           <div class="tags">${ex.b.map(b => `<span class="tag o">${tr('bodyParts', b)}</span>`).join('')}${ex.q.map(q => `<span class="tag">${tr('equipment', q)}</span>`).join('')}${ex.custom ? '<span class="tag">Personalizado</span>' : ''}</div>
           ${ex.custom ? '' : `<div class="quick-grid mt"><a class="btn yt-btn" href="${ytUrl}" target="_blank" rel="noopener">${ic('yt')} Vídeo (EN)</a><a class="btn yt-btn" style="background:#b30024" href="${ytEs}" target="_blank" rel="noopener">${ic('yt')} Vídeo (ES)</a></div>`}
           <h2 class="section">Músculos</h2>
@@ -983,6 +985,7 @@
             <div class="mm"><div class="l">Secundarios</div><div class="v">${ex.s.map(m => tr('muscles', m)).join(', ') || '—'}</div></div>
           </div>
           ${ex.x.length ? `<h2 class="section">Cómo se hace ${!ex.custom && !ex.es ? `<a class="link" href="${trUrl}" target="_blank" rel="noopener" style="font-size:13px">${ic('globe', 'ico')} Traducir</a>` : ''}</h2><ol class="steps">${ex.x.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
+          ${ex.hyp ? HYPO.info(ex) : ''}
           ${rec.e1rm || rec.reps ? `<h2 class="section">Tus mejores marcas</h2>${recGrid(k, rec)}` : ''}`;
         if (t === 'hist') body = hist.length ? hist.map(h => `<div class="hist-card"><div class="hc-t">${esc(h.workout.title)}</div><div class="hc-d">${fmtDate(h.workout.start, true)}</div>
             ${h.sets.map((s, i) => `<div class="hc-s"><b style="color:${typeColor(s.type)}">${typeLabel[s.type] || h.sets.slice(0, i + 1).filter(x => x.type !== 'w' && x.type !== 'd').length}</b><span style="flex:1">${setText(k, s)}</span>${k === 'weight' && s.type !== 'w' ? `<span class="muted" style="font-size:12px">1RM ${nf(Store.toDisplay(Store.e1rm(+s.w, +s.r)))}</span>` : ''}</div>`).join('')}</div>`).join('')
@@ -1139,8 +1142,8 @@
       <textarea class="aw-note" rows="1" data-field="note" data-e="${ei}" placeholder="Añadir notas aquí…">${esc(e.notes || '')}</textarea>
       ${act ? `<button class="aw-rest" data-act="restPick" data-e="${ei}">${ic('clock')} Descanso: ${fmtRest(rest)}${ss && w.exercises.slice(ei + 1).some(x => x.ss === e.ss) ? ' · <span class="muted">tras la superserie</span>' : ''}</button>` : ''}
       ${tip ? `<div class="tip-line ${tip.up ? 'up' : ''}">${ic('bulb')}<span><b>${tip.up ? '¡Hora de subir! ' : 'Objetivo: '}${tip.text}</b><small>${tip.why}</small></span><button class="btn sm" data-act="applyTip" data-e="${ei}">Aplicar</button></div>` : ''}
-      <div class="set-table">
-        <div class="set-row head"><span>SERIE</span><span>ANTERIOR</span><span>${c[0]}</span><span>${c[1]}</span><span>✓</span></div>
+      <div class="set-table ${ex.hyp ? 'no-w' : ''}">
+        <div class="set-row head"><span>SERIE</span><span>ANTERIOR</span><span>${ex.hyp ? '' : c[0]}</span><span>${c[1]}</span><span>✓</span></div>
         ${e.sets.map((s, si) => {
       if (s.type === 'n' || s.type === 'f') n++;
       const ph = placeholders(e, si, prev), p = prev[si];
@@ -2089,6 +2092,7 @@
         ${Cloud.needsVerify() ? `<button class="btn primary block mt" data-act="verify">✉️ Verificar mi correo</button>` : ''}
         ${Cloud.provider() === 'password' ? `<button class="sheet-opt" data-act="pass">${ic('lock')}<span>Cambiar contraseña<span class="sub">Te enviamos un correo para elegir una nueva</span></span></button>` : ''}
         <button class="sheet-opt" data-act="logout">${ic('logout')}<span>Cerrar sesión</span></button>
+        <button class="sheet-opt danger" data-act="wipe">${ic('repeat')}<span>Borrar los datos de esta cuenta<span class="sub">Deja la cuenta vacía (entrenos, rutinas, nombre y foto) sin eliminarla</span></span></button>
         <button class="sheet-opt danger" data-act="del">${ic('trash')}<span>Eliminar cuenta<span class="sub">Borra tu cuenta y todos tus datos de la nube</span></span></button>
       </div></div>`,
       actions: {
@@ -2098,6 +2102,18 @@
         pass: async () => { try { await Cloud.resetPassword(c.user.email); toast('📧 Revisa tu correo para cambiar la contraseña'); } catch (ex) { toast(ex.message); } },
         logout: confirmLogout,
         photo: openAvatarPicker,
+        wipe: async (t, e, L) => {
+          const v = await modal({ title: '⚠️ Borrar los datos de esta cuenta', text: 'Se borrarán <b>todos los entrenos, rutinas, medidas, el nombre y la foto</b> de esta cuenta, en la nube y en este móvil. La cuenta y tu nombre de usuario se mantienen. Escribe <b>BORRAR</b> para confirmar.', html: '<input class="input" placeholder="BORRAR" style="margin-bottom:16px">', buttons: [{ label: 'Cancelar', value: null }, { label: 'Borrar datos', value: 'input', cls: 'danger' }] });
+          if (!v || v.trim().toUpperCase() !== 'BORRAR') return;
+          try {
+            stopRest();
+            await Cloud.resetData();
+            Store.replaceWithEmpty();
+            if (c.profile && c.profile.username) S().settings.name = c.profile.username;
+            save(); L.render(); renderTab();
+            toast('🧹 Cuenta vacía: empiezas de cero');
+          } catch (ex) { toast(ex.message || 'No se pudo borrar (¿sin conexión?)'); }
+        },
         del: async () => {
           const v = await modal({ title: '⚠️ Eliminar cuenta', text: 'Se borrará tu cuenta y <b>todos tus entrenos de la nube</b> para siempre. Los datos de este móvil se mantienen. Escribe <b>ELIMINAR</b> para confirmar.', html: '<input class="input" placeholder="ELIMINAR" style="margin-bottom:16px">', buttons: [{ label: 'Cancelar', value: null }, { label: 'Eliminar', value: 'input', cls: 'danger' }] });
           if (!v || v.trim().toUpperCase() !== 'ELIMINAR') return;

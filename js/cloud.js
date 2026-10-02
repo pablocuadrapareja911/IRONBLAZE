@@ -159,6 +159,20 @@ window.Cloud = (function () {
   }
   async function signOut() { clearTimeout(timer); forgetSync(); await auth.signOut(); }
 
+  // Deja la cuenta vacía en la nube (entrenos, rutinas, medidas, nombre y foto) sin eliminarla
+  async function resetData() {
+    const u = auth.currentUser; if (!u) return;
+    clearTimeout(timer);
+    while (syncing) await new Promise(r => setTimeout(r, 200));
+    const base = db.collection('users').doc(u.uid);
+    const ws = await base.collection('workouts').get();
+    let batch = db.batch(), n = 0;
+    for (const d of ws.docs) { batch.delete(d.ref); if (++n % 400 === 0) { await batch.commit(); batch = db.batch(); } }
+    batch.delete(base.collection('meta').doc('state'));
+    await batch.commit();
+    forgetSync();
+  }
+
   async function deleteAccount() {
     const u = auth.currentUser; if (!u) return;
     const base = db.collection('users').doc(u.uid);
@@ -301,7 +315,7 @@ window.Cloud = (function () {
 
   return {
     get st() { return st; }, init, onChange: f => { listeners.add(f); return () => listeners.delete(f); },
-    needsVerify, canSync, signUp, signIn, social, resetPassword, resendVerification, reloadUser, signOut, deleteAccount,
+    needsVerify, canSync, signUp, signIn, social, resetPassword, resendVerification, reloadUser, signOut, deleteAccount, resetData,
     claimUsername, usernameFree, validUsername, sync, schedule, provider: () => provider(st.user),
     setConflictHandler: f => { conflictHandler = f; }
   };

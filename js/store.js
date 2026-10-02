@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.5.3';
+  const VERSION = '1.6.0';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -232,12 +232,12 @@
     let volume = 0, sets = 0, reps = 0;
     const bw = bodyweight();
     for (const ex of w.exercises) {
-      const k = kind(getEx(ex.exId));
+      const exd = getEx(ex.exId), k = kind(exd);
       for (const s of ex.sets) {
         if (!s.done) continue;
         sets++;
         if (k === 'weight') { volume += setVolume(s); reps += +s.r || 0; }
-        else if (k === 'bw') { if (s.type !== 'w') volume += ((+s.w || 0) + bw) * (+s.r || 0); reps += +s.r || 0; }
+        else if (k === 'bw') { if (s.type !== 'w' && !exd.hyp) volume += ((+s.w || 0) + bw) * (+s.r || 0); reps += +s.r || 0; }
       }
     }
     const duration = ((w.end || Date.now()) - w.start) / 1000;
@@ -404,6 +404,15 @@
       name: 'HIIT Quemagrasa', level: 'Todos', desc: 'Circuito metabólico con descansos cortos. 25-30 minutos.',
       routines: [
         { name: 'HIIT Circuito', exercises: [E('dK9394r', 4, 12, 30), E('LIlE5Tn', 4, 15, 30), E('RJgzwny', 4, 30, 30), E('UHJlbu3', 4, 20, 30), E('I4hDWkc', 4, 15, 30), E('1ZFqTDN', 4, 20, 30)] }
+      ]
+    },
+    {
+      name: 'Hipopresivos y suelo pélvico', level: 'Principiante', desc: 'Gimnasia abdominal hipopresiva y Kegel: suelo pélvico, cintura y postura. 2-3 días por semana, sin material. En los hipopresivos cada serie es una apnea: apunta los segundos.',
+      routines: [
+        { name: 'Hipopresivos · Sesión completa', exercises: [E('hyp_learn', 3, 10, 20), E('hyp_venus', 3, 10, 20), E('hyp_atenea', 3, 10, 20), E('hyp_artemisa', 3, 10, 20), E('hyp_aura', 3, 10, 20), E('hyp_hestia', 3, 10, 20), E('hyp_maya', 3, 10, 20), E('hyp_supine', 3, 10, 20)] },
+        { name: 'Hipopresivos · Sesión corta', exercises: [E('hyp_venus', 3, 10, 20), E('hyp_atenea', 3, 10, 20), E('hyp_hestia', 3, 10, 20), E('hyp_supine', 3, 10, 20), E('hyp_overhead', 3, 10, 20)] },
+        { name: 'Hipopresivos · Nivel intermedio', exercises: [E('hyp_venus', 3, 15, 20), E('hyp_atenea', 3, 15, 20), E('hyp_freya', 4, 15, 20), E('hyp_persefone', 4, 15, 20), E('hyp_gaia', 3, 15, 20), E('hyp_maya', 3, 15, 20), E('hyp_selene', 4, 15, 20), E('hyp_bridge', 3, 15, 20)] },
+        { name: 'Suelo pélvico · Kegel', exercises: [E('hyp_kegel', 3, 10, 30)] }
       ]
     }
   ];
