@@ -18,8 +18,18 @@ window.Cloud = (function () {
   const needsVerify = () => !!(st.user && provider(st.user) === 'password' && !st.user.emailVerified);
   const canSync = () => !!(st.user && !needsVerify() && st.profile);
 
-  function loadScript(src) {
-    return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  // Huella de cada archivo de Firebase: si alguien lo manipulara en el servidor, el navegador se niega a ejecutarlo
+  const SRI = {
+    'firebase-app-compat.js': 'sha384-AQ3POAMqIhwS81FrUH95ekxqBZHeP5tG2JfEL3+7GuTtfRLWnrRh32UxwzM+//A9',
+    'firebase-auth-compat.js': 'sha384-TnlRYaR4JYz/lpaGuaiU61PjNberSA4vjLjtF+oRC/IkohkJqnWxw5EmDSOt1vA1',
+    'firebase-firestore-compat.js': 'sha384-qn4Jh88HhJA8dplNQyGjOh9OGI4izVhrfj/qIFgaKcdgOE06pXqIKGlsCILZcLAC'
+  };
+  function loadScript(file) {
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = SDK + file; s.integrity = SRI[file]; s.crossOrigin = 'anonymous';
+      s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    });
   }
 
   const ERR = {
@@ -51,8 +61,8 @@ window.Cloud = (function () {
   async function init() {
     if (!st.configured) return;
     try {
-      await loadScript(SDK + 'firebase-app-compat.js');
-      await Promise.all([loadScript(SDK + 'firebase-auth-compat.js'), loadScript(SDK + 'firebase-firestore-compat.js')]);
+      await loadScript('firebase-app-compat.js');
+      await Promise.all([loadScript('firebase-auth-compat.js'), loadScript('firebase-firestore-compat.js')]);
     } catch (e) { st.error = 'Sin conexión: no se pudo cargar el servicio de cuentas.'; emit(); return; }
     fb = window.firebase;
     fb.initializeApp(cfg);
