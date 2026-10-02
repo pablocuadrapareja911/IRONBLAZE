@@ -1,9 +1,9 @@
 // IRONBLAZE service worker: arranque instantáneo desde caché, modo sin conexión, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.7.0';
+const VERSION = '1.7.1';
 const APP = 'ironblaze-app-' + VERSION;   // archivos de la app (versión concreta)
 const MEDIA = 'ironblaze-media-v1';        // animaciones y fotos de ejercicios
-const FONTS = 'ironblaze-fonts-v1';        // tipografías de Google Fonts
+const FONTS = 'ironblaze-fonts-v2';        // tipografías de Google Fonts y librería de Firebase (v2: se guardan con CORS para poder comprobar su huella)
 const MEDIA_MAX = 400;                     // máximo de imágenes guardadas (evita llenar el móvil)
 const SHELL = ['./', 'index.html', 'css/styles.css', 'js/exercises-data.js', 'js/hypopressive.js', 'js/hd-images.js', 'js/es-content.js', 'js/i18n.js',
   'js/store.js', 'js/bodymap.js', 'js/firebase-config.js', 'js/cloud.js', 'js/charts.js', 'js/app.js', 'icon.svg',
@@ -18,7 +18,7 @@ self.addEventListener('install', e => {
 });
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k.startsWith('ironblaze-app-') && k !== APP).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => (k.startsWith('ironblaze-app-') && k !== APP) || (k.startsWith('ironblaze-fonts-') && k !== FONTS)).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
