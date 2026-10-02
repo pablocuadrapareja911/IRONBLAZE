@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.7.2';
+  const VERSION = '1.8.0';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -189,9 +189,26 @@
     if (e.en) continue;
     e.en = e.n;
     const es = ES[e.i];
-    if (es) { e.n = es.n; e.xen = e.x; e.x = es.x; e.es = true; }
-    else e.n = e.n.charAt(0).toUpperCase() + e.n.slice(1);
+    if (es) { e.n = es.n; e.x = es.x; e.es = true; }
+    else { e.n = e.n.charAt(0).toUpperCase() + e.n.slice(1); if (!e.x) e.x = []; }
   }
+  // Las instrucciones en inglés van en un archivo aparte (pesan el 80% de los datos) y se cargan
+  // en segundo plano después de arrancar: así la app se abre mucho antes.
+  let textP = null;
+  function loadExerciseText() {
+    if (window.EXERCISE_TEXT) return Promise.resolve();
+    return textP || (textP = new Promise(res => {
+      const s = document.createElement('script'); s.src = 'js/exercises-text.js';
+      s.onload = () => {
+        const T = window.EXERCISE_TEXT || {};
+        for (const e of window.EXERCISE_DB) if (!e.es && T[e.i]) e.x = T[e.i];
+        res();
+      };
+      s.onerror = () => { textP = null; res(); }; // sin conexión: se reintenta la próxima vez
+      document.head.appendChild(s);
+    }));
+  }
+  const exerciseTextReady = () => !!window.EXERCISE_TEXT;
   function indexExercises() {
     byId.clear();
     for (const e of window.EXERCISE_DB) byId.set(e.i, e);
@@ -433,7 +450,7 @@
     save, uid, GIF, HD, getEx, allExercises, kind, indexExercises, bodyweight,
     toDisplay, fromDisplay, unit, e1rm, workoutStats, exerciseHistory, previousSets,
     records, setPR, workoutPRs, streakWeeks, weekKey, PROGRAMS, VERSION,
-    autoSnapshot, snapshots, restoreSnapshot, importData, replaceWithEmpty, sanitizeWorkout, sanitizeState,
+    autoSnapshot, snapshots, restoreSnapshot, importData, replaceWithEmpty, sanitizeWorkout, sanitizeState, loadExerciseText, exerciseTextReady,
     cached,
     reset() { state = defaults(); indexExercises(); save(true); }
   };

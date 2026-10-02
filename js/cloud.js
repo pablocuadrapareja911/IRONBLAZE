@@ -61,19 +61,21 @@ window.Cloud = (function () {
 
   async function init() {
     if (!st.configured) return;
+    // Para arrancar solo hace falta el inicio de sesión (y App Check, en paralelo). La base de datos (Firestore, la
+    // librería más pesada) se carga aparte: ya mismo si había sesión guardada, o cuando de verdad haga falta.
+    let appCheckOk = false;
     try {
       await loadScript('firebase-app-compat.js');
-      await Promise.all([loadScript('firebase-auth-compat.js'), loadScript('firebase-firestore-compat.js')]);
+      await Promise.all([loadScript('firebase-auth-compat.js'),
+        window.RECAPTCHA_SITE_KEY ? loadScript('firebase-app-check-compat.js').then(() => { appCheckOk = true; }, e => console.warn('App Check no disponible', e)) : null]);
     } catch (e) { st.error = 'Sin conexión: no se pudo cargar el servicio de cuentas.'; emit(); return; }
     fb = window.firebase;
     fb.initializeApp(cfg);
     // App Check: demuestra a Firebase que las peticiones vienen de la app de verdad (reCAPTCHA de Fraud Defense, invisible).
     // Si no se puede cargar, la app sigue funcionando (mientras App Check no esté en modo "bloquear").
-    if (window.RECAPTCHA_SITE_KEY) {
-      try { await loadScript('firebase-app-check-compat.js'); fb.appCheck().activate(new fb.appCheck.ReCaptchaEnterpriseProvider(window.RECAPTCHA_SITE_KEY), true); }
-      catch (e) { console.warn('App Check no disponible', e); }
-    }
-    auth = fb.auth(); db = fb.firestore();
+    if (appCheckOk) { try { fb.appCheck().activate(new fb.appCheck.ReCaptchaEnterpriseProvider(window.RECAPTCHA_SITE_KEY), true); } catch (e) { console.warn('App Check', e); } }
+    auth = fb.auth();
+    if (localStorage.getItem('ib.session')) getDb().catch(() => { });
     auth.languageCode = 'es';
     st.loaded = true;
     try { await auth.getRedirectResult(); } catch (e) { st.error = errMsg(e); }
@@ -97,8 +99,15 @@ window.Cloud = (function () {
     document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(1000); });
   }
 
+  // Firestore bajo demanda (una sola carga aunque se pida varias veces a la vez)
+  let dbP = null;
+  function getDb() {
+    return dbP || (dbP = loadScript('firebase-firestore-compat.js').then(() => (db = fb.firestore()), e => { dbP = null; throw e; }));
+  }
+
   async function loadProfile() {
     try {
+      await getDb();
       const d = await db.collection('users').doc(st.user.uid).get();
       st.profile = d.exists && d.data().username ? d.data() : null;
       st.profileLoaded = true;
@@ -108,10 +117,12 @@ window.Cloud = (function () {
   // ---------- Nombre de usuario ----------
   const validUsername = u => /^[a-zA-Z0-9_.]{3,20}$/.test(u);
   async function usernameFree(u) {
+    await getDb();
     const d = await db.collection('usernames').doc(u.toLowerCase()).get();
     return !d.exists || (st.user && d.data().uid === st.user.uid);
   }
   async function claimUsername(uname) {
+    await getDb();
     uname = uname.trim();
     if (!validUsername(uname)) throw new Error('El usuario debe tener entre 3 y 20 caracteres: letras, números, "_" o ".".');
     const u = auth.currentUser, key = uname.toLowerCase();
@@ -178,6 +189,7 @@ window.Cloud = (function () {
 
   // Deja la cuenta vacía en la nube (entrenos, rutinas, medidas, nombre y foto) sin eliminarla
   async function resetData() {
+    await getDb();
     const u = auth.currentUser; if (!u) return;
     clearTimeout(timer);
     while (syncing) await new Promise(r => setTimeout(r, 200));
@@ -191,6 +203,7 @@ window.Cloud = (function () {
   }
 
   async function deleteAccount() {
+    await getDb();
     const u = auth.currentUser; if (!u) return;
     const base = db.collection('users').doc(u.uid);
     const ws = await base.collection('workouts').get();
@@ -242,6 +255,8 @@ window.Cloud = (function () {
   async function sync() {
     if (!canSync()) return;
     if (syncing) { again = true; return; }
+    try { await getDb(); } catch (e) { st.sync = 'error'; st.error = 'Sin conexión: no se pudo cargar la nube.'; emit(); return; }
+    if (syncing) { again = true; return; } // (mientras se cargaba, otra sincronización pudo empezar)
     syncing = true; st.sync = 'syncing'; st.error = ''; emit();
     const uid = st.user.uid, S = Store.state, key = 'ib.sync.' + uid;
     // firstTime: esta cuenta nunca se ha sincronizado en este móvil → lo de la nube (nombre, foto, ajustes) manda

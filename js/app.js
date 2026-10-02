@@ -976,10 +976,13 @@
     const enName = ex.en || ex.n;
     const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent('how to ' + enName + ' proper form')}`;
     const ytEs = `https://www.youtube.com/results?search_query=${encodeURIComponent(ex.yt || 'cómo hacer ' + (ex.es ? ex.n : enName) + ' técnica')}`;
-    const trUrl = `https://translate.google.com/?sl=en&tl=es&op=translate&text=${encodeURIComponent(ex.x.join('\n'))}`;
+    // Si las instrucciones aún no han llegado (se cargan en segundo plano), se pinta ya y se completa al llegar
+    if (!Store.exerciseTextReady() && !ex.custom && !ex.es) Store.loadExerciseText().then(() => { const l = stack.find(x => x.def.exId === id); if (l) l.render(); });
     openLayer({
+      exId: id,
       data: { tab: 'sum', metric: k === 'weight' || k === 'bw' ? 'e1rm' : 'r', media: 'hd' },
       html: L => {
+        const trUrl = `https://translate.google.com/?sl=en&tl=es&op=translate&text=${encodeURIComponent(ex.x.join('\n'))}`;
         const hist = Store.exerciseHistory(id), rec = Store.records(id), t = L.data.tab;
         let body = '';
         const hd = Store.HD(ex.i), mode = hd ? L.data.media : 'gif';
@@ -1001,7 +1004,7 @@
             <div class="mm"><div class="l">Principal</div><div class="v">${ex.t.map(m => tr('muscles', m)).join(', ') || '—'}</div></div>
             <div class="mm"><div class="l">Secundarios</div><div class="v">${ex.s.map(m => tr('muscles', m)).join(', ') || '—'}</div></div>
           </div>
-          ${ex.x.length ? `<h2 class="section">Cómo se hace ${!ex.custom && !ex.es ? `<a class="link" href="${trUrl}" target="_blank" rel="noopener" style="font-size:13px">${ic('globe', 'ico')} Traducir</a>` : ''}</h2><ol class="steps">${ex.x.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : ''}
+          ${ex.x.length ? `<h2 class="section">Cómo se hace ${!ex.custom && !ex.es ? `<a class="link" href="${trUrl}" target="_blank" rel="noopener" style="font-size:13px">${ic('globe', 'ico')} Traducir</a>` : ''}</h2><ol class="steps">${ex.x.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : (!ex.custom && !ex.es && !Store.exerciseTextReady() ? '<h2 class="section">Cómo se hace</h2><p class="muted" style="font-size:13px">Cargando instrucciones…</p>' : '')}
           ${ex.hyp ? HYPO.info(ex) : ''}
           ${rec.e1rm || rec.reps ? `<h2 class="section">Tus mejores marcas</h2>${recGrid(k, rec)}` : ''}`;
         if (t === 'hist') body = hist.length ? hist.map(h => `<div class="hist-card"><div class="hc-t">${esc(h.workout.title)}</div><div class="hc-d">${fmtDate(h.workout.start, true)}</div>
@@ -2022,7 +2025,7 @@
         const m = L.data.mode;
         return `<div class="screen ${L.data.gate ? 'still' : 'up'}"><div class="page auth-page">
           <div class="page-head">${L.data.gate ? '<h1></h1>' : `<button class="icon-btn ghost back-btn" data-act="close">${ic('close')}</button><h1></h1>`}</div>
-          <div class="center">${L.data.gate ? '<img class="auth-logo" src="icons/logo-256.png" alt="" width="96" height="96">' : ''}<div class="brand" style="font-size:40px">IRON<b>BLAZE</b></div>
+          <div class="center">${L.data.gate ? '<img class="auth-logo" src="icons/logo-256.jpg" alt="" width="96" height="96">' : ''}<div class="brand" style="font-size:40px">IRON<b>BLAZE</b></div>
             <p class="muted" style="margin:4px 0 22px">${m === 'signup' ? 'Crea tu cuenta y guarda tu progreso en la nube' : m === 'reset' ? 'Te enviaremos un correo para crear una contraseña nueva' : 'Bienvenido de nuevo 💪'}</p></div>
           ${m !== 'reset' ? `
           <button class="btn block social google" data-act="google">${GOOGLE_SVG} Continuar con Google</button>
@@ -2518,7 +2521,7 @@
     g.fillStyle = '#0a0a0a'; g.fillRect(0, 0, W, H);
     const glow = g.createRadialGradient(W / 2, -80, 40, W / 2, -80, 950); glow.addColorStop(0, 'rgba(255,106,0,.5)'); glow.addColorStop(1, 'rgba(255,106,0,0)');
     g.fillStyle = glow; g.fillRect(0, 0, W, H);
-    const logo = await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = 'icons/logo-256.png'; });
+    const logo = await new Promise(r => { const i = new Image(); i.onload = () => r(i); i.onerror = () => r(null); i.src = 'icons/logo-256.jpg'; });
     if (logo) { g.save(); rr(g, 70, 64, 110, 110, 26); g.clip(); g.drawImage(logo, 70, 64, 110, 110); g.restore(); }
     g.textBaseline = 'middle'; g.font = '64px Anton, Impact, sans-serif';
     g.fillStyle = '#fff'; g.fillText('IRON', 204, 122); g.fillStyle = '#ff6a00'; g.fillText('BLAZE', 204 + g.measureText('IRON').width, 122);
@@ -2661,8 +2664,10 @@
   }
   function initSW() {
     if (!('serviceWorker' in navigator) || !location.protocol.startsWith('http')) return;
-    // updateViaCache 'none': el navegador nunca usa la caché al comprobar si hay versión nueva
-    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
+    // updateViaCache 'none': el navegador nunca usa la caché al comprobar si hay versión nueva.
+    // La primera vez se registra cuando la app ya está cargada, para no competir con ella por la conexión.
+    const firstVisit = !navigator.serviceWorker.controller;
+    const register = () => navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
       swReg = reg;
       const check = () => reg.update().catch(() => { });
       setInterval(check, 15 * 60e3);
@@ -2673,8 +2678,16 @@
       reg.addEventListener('updatefound', () => watch(reg.installing));
       check(); // comprueba también nada más abrir
     }).catch(() => { });
-    let reloading = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (reloading) return; reloading = true; location.reload(); });
+    if (!firstVisit) register();
+    else if (document.readyState === 'complete') setTimeout(register, 3000);
+    else window.addEventListener('load', () => setTimeout(register, 3000));
+    let reloading = false, firstClaim = firstVisit;
+    // La primera instalación no recarga la página (la app ya está funcionando; antes provocaba una segunda
+    // carga completa al estrenarla). Solo se recarga al ACTUALIZAR a una versión nueva.
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (firstClaim) { firstClaim = false; return; }
+      if (reloading) return; reloading = true; location.reload();
+    });
   }
 
   // =====================================================================
@@ -2700,6 +2713,8 @@
   }, true);
   Store.autoSnapshot();
   initSW();
+  // Lo que no hace falta para ver la primera pantalla se carga cuando el móvil queda libre
+  (window.requestIdleCallback || (f => setTimeout(f, 2500)))(() => Store.loadExerciseText(), { timeout: 6000 });
   // Arranque sin saltos: sin sesión guardada, la pantalla de acceso sale al instante;
   // con sesión, se ve el logo de carga hasta que Firebase confirma y luego la app.
   if (Cloud.st.configured && !S().settings.authSkipped && !localStorage.getItem('ib.session')) { openAuth('login', { gate: true }); hideSplash(); }
