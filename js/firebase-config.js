@@ -11,3 +11,5 @@ window.FIREBASE_CONFIG = {
 };
 // Inicio de sesión con Facebook desactivado de momento
 window.AUTH_FACEBOOK = false;
+// App Check: clave PÚBLICA de reCAPTCHA (Fraud Defense). No es secreta: va en el código de la web
+window.RECAPTCHA_SITE_KEY = '6Lcg4tstAAAAABtILyRyrcXdLd8W_7Xrw2lzwZQS';

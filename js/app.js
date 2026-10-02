@@ -1828,7 +1828,7 @@
           <div class="muted center mt" style="font-size:12px;line-height:1.6;padding:20px 0">
             <div class="brand" style="font-size:22px">IRON<b>BLAZE</b></div>
             Versión ${Store.VERSION}<br>
-            Animaciones: <a class="link" href="https://oss.exercisedb.dev" target="_blank" rel="noopener">ExerciseDB</a> · Fotos HD: <a class="link" href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a><br>${Cloud.st.user ? 'Tus datos se guardan en este móvil y en tu cuenta.' : 'Tus datos se guardan solo en este dispositivo.'}</div>
+            Animaciones: <a class="link" href="https://oss.exercisedb.dev" target="_blank" rel="noopener">ExerciseDB</a> · Fotos HD: <a class="link" href="https://github.com/yuhonas/free-exercise-db" target="_blank" rel="noopener">free-exercise-db</a><br>${Cloud.st.user ? 'Tus datos se guardan en este móvil y en tu cuenta.' : 'Tus datos se guardan solo en este dispositivo.'}<br><span style="font-size:11px">Protegido por reCAPTCHA: se aplican la <a class="link" href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacidad</a> y las <a class="link" href="https://policies.google.com/terms" target="_blank" rel="noopener">Condiciones</a> de Google.</span></div>
         </div></div>`;
       },
       onChange: e => {

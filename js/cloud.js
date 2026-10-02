@@ -22,7 +22,8 @@ window.Cloud = (function () {
   const SRI = {
     'firebase-app-compat.js': 'sha384-AQ3POAMqIhwS81FrUH95ekxqBZHeP5tG2JfEL3+7GuTtfRLWnrRh32UxwzM+//A9',
     'firebase-auth-compat.js': 'sha384-TnlRYaR4JYz/lpaGuaiU61PjNberSA4vjLjtF+oRC/IkohkJqnWxw5EmDSOt1vA1',
-    'firebase-firestore-compat.js': 'sha384-qn4Jh88HhJA8dplNQyGjOh9OGI4izVhrfj/qIFgaKcdgOE06pXqIKGlsCILZcLAC'
+    'firebase-firestore-compat.js': 'sha384-qn4Jh88HhJA8dplNQyGjOh9OGI4izVhrfj/qIFgaKcdgOE06pXqIKGlsCILZcLAC',
+    'firebase-app-check-compat.js': 'sha384-E3vxFxXu8FhW5kvqdQJ5Yf8ugrV7iCJP8jgnItRH2Rk8Q08cJzJGTi/oMC3FEp3j'
   };
   function loadScript(file) {
     return new Promise((res, rej) => {
@@ -66,6 +67,12 @@ window.Cloud = (function () {
     } catch (e) { st.error = 'Sin conexión: no se pudo cargar el servicio de cuentas.'; emit(); return; }
     fb = window.firebase;
     fb.initializeApp(cfg);
+    // App Check: demuestra a Firebase que las peticiones vienen de la app de verdad (reCAPTCHA de Fraud Defense, invisible).
+    // Si no se puede cargar, la app sigue funcionando (mientras App Check no esté en modo "bloquear").
+    if (window.RECAPTCHA_SITE_KEY) {
+      try { await loadScript('firebase-app-check-compat.js'); fb.appCheck().activate(new fb.appCheck.ReCaptchaEnterpriseProvider(window.RECAPTCHA_SITE_KEY), true); }
+      catch (e) { console.warn('App Check no disponible', e); }
+    }
     auth = fb.auth(); db = fb.firestore();
     auth.languageCode = 'es';
     st.loaded = true;
