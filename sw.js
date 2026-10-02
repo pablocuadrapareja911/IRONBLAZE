@@ -1,6 +1,6 @@
 // IRONBLAZE service worker: arranque instantáneo desde caché, modo sin conexión, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.6.1';
+const VERSION = '1.7.0';
 const APP = 'ironblaze-app-' + VERSION;   // archivos de la app (versión concreta)
 const MEDIA = 'ironblaze-media-v1';        // animaciones y fotos de ejercicios
 const FONTS = 'ironblaze-fonts-v1';        // tipografías de Google Fonts
@@ -113,3 +113,25 @@ self.addEventListener('notificationclick', e => {
     return self.clients.openWindow('./');
   }));
 });
+
+// ---- Recordatorios (entrenar, hipopresivos, días sin entrenar) ----
+// La app guarda la configuración en la caché 'ironblaze-cfg'; el sistema despierta al service worker
+// de vez en cuando (Periodic Background Sync) y aquí se decide si toca avisar. Como mucho un aviso de cada tipo al día.
+self.addEventListener('periodicsync', e => { if (e.tag === 'ib-reminders') e.waitUntil(checkReminders()); });
+async function checkReminders() {
+  try {
+    const c = await caches.open('ironblaze-cfg'), r = await c.match('reminders'); if (!r) return;
+    const cfg = await r.json(); if (cfg.active) return; // entrenando ahora mismo: no molestar
+    const now = new Date(), today = new Date(now).setHours(0, 0, 0, 0), dow = (now.getDay() + 6) % 7, hm = now.getHours() * 60 + now.getMinutes();
+    const at = s => { const [h, m] = String(s || '0:0').split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+    const sent = cfg.sent || {}, out = [];
+    if (cfg.train && (cfg.days || []).includes(dow) && hm >= at(cfg.tTime) && (cfg.lastTrain || 0) < today && sent.train !== today) { out.push(['train', '💪 Hoy toca entrenar', 'Tu entreno te espera. ¡A por ello! 🔥']); sent.train = today; }
+    if (cfg.hypo && hm >= at(cfg.hTime) && (cfg.lastHypo || 0) < today && sent.hypo !== today) { out.push(['hypo', '🧘 Tus hipopresivos de hoy', 'Con 10 minutos es suficiente.']); sent.hypo = today; }
+    if (cfg.idle && cfg.lastTrain && Date.now() - cfg.lastTrain >= 3 * 864e5 && hm >= 10 * 60 && hm < 22 * 60 && (!sent.idle || Date.now() - sent.idle >= 2 * 864e5)) {
+      out.push(['idle', '⏰ Llevas ' + Math.floor((Date.now() - cfg.lastTrain) / 864e5) + ' días sin entrenar', '¡Vuelve hoy, aunque sea un entreno corto!']); sent.idle = Date.now();
+    }
+    if (!out.length) return;
+    cfg.sent = sent; await c.put('reminders', new Response(JSON.stringify(cfg), { headers: { 'Content-Type': 'application/json' } }));
+    for (const [tag, title, body] of out) await self.registration.showNotification(title, { body, tag: 'ironblaze-' + tag, icon: 'icons/icon-192.png', badge: 'icons/icon-192.png' });
+  } catch (e) { }
+}
