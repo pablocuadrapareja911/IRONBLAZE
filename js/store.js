@@ -5,7 +5,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.8.1';
+  const VERSION = '1.8.2';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -98,7 +98,8 @@
       lastExport: +s.lastExport || 0, sound: !!s.sound, vibrate: !!s.vibrate, keepAwake: !!s.keepAwake, notify: !!s.notify, backupReminder: !!s.backupReminder,
       // Logros ya vistos, resúmenes cerrados y recordatorios
       achSeen: Array.isArray(s.achSeen) ? s.achSeen.filter(x => typeof x === 'string').slice(0, 200).map(x => ident(x)) : undefined,
-      sumSeenW: str(s.sumSeenW, 20), sumSeenM: str(s.sumSeenM, 20), rem: sanitizeRem(s.rem)
+      sumSeenW: str(s.sumSeenW, 20), sumSeenM: str(s.sumSeenM, 20), rem: sanitizeRem(s.rem),
+      soundVol: [1, 2, 3].includes(+s.soundVol) ? +s.soundVol : 2
     });
   }
   function sanitizeRem(r) {

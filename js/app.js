@@ -200,18 +200,28 @@
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
   }
   let actx;
-  function beep(times = 3) {
-    if (!S().settings.sound) return;
+  // Aviso sonoro. Antes era un tono suave (seno al 35%) que en el altavoz del móvil apenas se oía:
+  // ahora usa un tono más "cortante" en las frecuencias que mejor suenan en un altavoz pequeño, a más volumen,
+  // con un compresor para que suene fuerte sin distorsionar. Tres niveles en Ajustes (1 normal, 2 alto, 3 máximo).
+  function beep(times = 3, force) {
+    const s = S().settings; if (!s.sound && !force) return;
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const t0 = actx.currentTime;
-      for (let i = 0; i < times; i++) {
+      if (actx.state === 'suspended') actx.resume(); // el móvil lo "duerme" al cambiar de app
+      const vol = s.soundVol || 2, peak = [0, 0.45, 0.8, 1][vol], n = vol === 3 ? times + 2 : times;
+      const comp = actx.createDynamicsCompressor(); comp.threshold.value = -18; comp.knee.value = 6; comp.ratio.value = 6;
+      const master = actx.createGain(); master.gain.value = vol === 1 ? 1 : 1.8;
+      comp.connect(master); master.connect(actx.destination);
+      const t0 = actx.currentTime + 0.02, len = 0.32, gap = 0.14;
+      for (let i = 0; i < n; i++) {
+        const st = t0 + i * (len + gap), last = i === n - 1;
         const o = actx.createOscillator(), g = actx.createGain();
-        o.type = 'sine'; o.frequency.value = i === times - 1 ? 1175 : 880;
-        g.gain.setValueAtTime(0.0001, t0 + i * .3);
-        g.gain.exponentialRampToValueAtTime(0.35, t0 + i * .3 + .02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * .3 + .22);
-        o.connect(g); g.connect(actx.destination); o.start(t0 + i * .3); o.stop(t0 + i * .3 + .25);
+        o.type = vol === 1 ? 'triangle' : 'square'; o.frequency.value = last ? 1760 : 1320;
+        g.gain.setValueAtTime(0.0001, st);
+        g.gain.exponentialRampToValueAtTime(peak * (vol === 1 ? 1 : 0.5), st + 0.015);
+        g.gain.setValueAtTime(peak * (vol === 1 ? 1 : 0.5), st + len - 0.05);
+        g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? len + 0.15 : len));
+        o.connect(g); g.connect(comp); o.start(st); o.stop(st + len + 0.2);
       }
     } catch (e) { }
   }
@@ -1809,6 +1819,9 @@
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Descanso por defecto</div><div class="sr-sub">${fmtRest(s.restDefault)}</div></div><button class="btn sm" data-act="rest">Cambiar</button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Aviso de descanso en segundo plano</div><div class="sr-sub">${notifState}</div></div><button class="toggle ${canNotify() ? 'on' : ''}" data-act="notify"></button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Sonido al terminar descanso</div></div><button class="toggle ${s.sound ? 'on' : ''}" data-act="tog" data-k="sound"></button></div>
+          ${s.sound ? `<div class="setting-row"><div class="sr-main"><div class="sr-title">Volumen del aviso</div><div class="sr-sub">También depende del volumen multimedia del móvil</div></div>
+            <div class="row-flex"><div class="seg" style="width:190px">${[[1, 'Normal'], [2, 'Alto'], [3, 'Máximo']].map(([v, l]) => `<button class="${(s.soundVol || 2) === v ? 'on' : ''}" data-act="vol" data-v="${v}">${l}</button>`).join('')}</div>
+            <button class="btn sm" data-act="testSound">Probar</button></div></div>` : ''}
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Vibración</div></div><button class="toggle ${s.vibrate ? 'on' : ''}" data-act="tog" data-k="vibrate"></button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Mantener pantalla encendida</div><div class="sr-sub">Durante el entrenamiento</div></div><button class="toggle ${s.keepAwake ? 'on' : ''}" data-act="tog" data-k="keepAwake"></button></div>
           <h2 class="section">Recordatorios</h2>
@@ -1868,6 +1881,8 @@
         unit: (t, e, L) => { S().settings.unit = t.dataset.v; save(); L.render(); },
         rest: async (t, e, L) => { const v = await restSheet(S().settings.restDefault); if (v !== null) { S().settings.restDefault = v; save(); L.render(); } },
         tog: (t, e, L) => { const k = t.dataset.k; S().settings[k] = !S().settings[k]; save(); L.render(); },
+        vol: (t, e, L) => { S().settings.soundVol = +t.dataset.v; save(); L.render(); beep(3, true); },
+        testSound: () => { beep(3, true); vibrate([300, 150, 300]); },
         rem: async (t, e, L) => {
           const r = remCfg(), k = t.dataset.k; r[k] = !r[k];
           S().settings.rem = r; save(); L.render(); syncReminders();
