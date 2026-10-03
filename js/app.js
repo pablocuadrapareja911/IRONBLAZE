@@ -200,30 +200,95 @@
     clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
   }
   let actx;
-  // Aviso sonoro. Antes era un tono suave (seno al 35%) que en el altavoz del móvil apenas se oía:
-  // ahora usa un tono más "cortante" en las frecuencias que mejor suenan en un altavoz pequeño, a más volumen,
-  // con un compresor para que suene fuerte sin distorsionar. Tres niveles en Ajustes (1 normal, 2 alto, 3 máximo).
-  function beep(times = 3, force) {
+  // ---------------- Sonidos del aviso (sintetizados: no ocupan nada y funcionan sin internet) ----------------
+  // Cada sonido programa sus notas en el contexto de audio y devuelve cuánto dura (s).
+  function tone(c, out, t, f, dur, { type = 'square', peak = 0.5, att = 0.01, hold = 0.6, glide } = {}) {
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + att);
+    g.gain.setValueAtTime(peak, t + Math.max(att, dur * hold)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+  }
+  // Campana: suma de parciales inarmónicos que se apagan poco a poco (suena metálico de verdad)
+  function bell(c, out, t, f, dur = 1.6, peak = 0.5) {
+    [[1, 1], [2.76, 0.55], [5.4, 0.35], [8.93, 0.2], [0.5, 0.3]].forEach(([r, a]) => {
+      const o = c.createOscillator(), g = c.createGain(); o.type = 'sine'; o.frequency.value = f * r;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak * a, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur / Math.sqrt(r)); o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+    });
+  }
+  function noise(c, out, t, dur, { peak = 0.6, freq = 1000, q = 1, type = 'bandpass' } = {}) {
+    const b = c.createBuffer(1, Math.ceil(c.sampleRate * dur), c.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    const s = c.createBufferSource(), fl = c.createBiquadFilter(), g = c.createGain();
+    s.buffer = b; fl.type = type; fl.frequency.value = freq; fl.Q.value = q;
+    g.gain.setValueAtTime(peak, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(fl); fl.connect(g); g.connect(out); s.start(t); s.stop(t + dur);
+  }
+  const SOUNDS = [
+    { id: 'classic', name: 'Pitido clásico', ic: '📢', play: (c, o, t) => { [1320, 1320, 1760].forEach((f, i) => tone(c, o, t + i * 0.46, f, i === 2 ? 0.47 : 0.32, { peak: 0.4 })); return 1.4; } },
+    { id: 'digital', name: 'Reloj digital', ic: '⌚', play: (c, o, t) => { for (let i = 0; i < 8; i++) tone(c, o, t + i * 0.11 + (i >= 4 ? 0.3 : 0), 2400, 0.07, { peak: 0.35, hold: 0.9 }); return 1.2; } },
+    { id: 'bell', name: 'Campana', ic: '🔔', play: (c, o, t) => { bell(c, o, t, 880); bell(c, o, t + 0.7, 880); return 2.3; } },
+    { id: 'boxing', name: 'Campana de boxeo', ic: '🥊', play: (c, o, t) => { for (let i = 0; i < 3; i++) bell(c, o, t + i * 0.2, 1250, 1.4, 0.55); return 1.9; } },
+    { id: 'gong', name: 'Gong', ic: '🪘', play: (c, o, t) => { bell(c, o, t, 140, 3.2, 0.9); bell(c, o, t, 210, 2.4, 0.4); return 3.2; } },
+    { id: 'doorbell', name: 'Timbre ding-dong', ic: '🚪', play: (c, o, t) => { tone(c, o, t, 784, 0.9, { type: 'sine', peak: 0.7, hold: 0.05 }); tone(c, o, t + 0.5, 622, 1.2, { type: 'sine', peak: 0.7, hold: 0.05 }); return 1.7; } },
+    { id: 'chime', name: 'Carillón', ic: '🎐', play: (c, o, t) => { [1319, 1047, 1175, 784].forEach((f, i) => bell(c, o, t + i * 0.32, f, 1.2, 0.4)); return 2.2; } },
+    { id: 'marimba', name: 'Marimba', ic: '🎵', play: (c, o, t) => { [1047, 1319, 1568, 2093].forEach((f, i) => tone(c, o, t + i * 0.14, f, 0.45, { type: 'sine', peak: 0.7, att: 0.004, hold: 0.02 })); return 1; } },
+    { id: 'whistle', name: 'Silbato de árbitro', ic: '🏟️', play: (c, o, t) => {
+      [0, 0.5].forEach(d => {
+        const os = c.createOscillator(), g = c.createGain(), lfo = c.createOscillator(), lg = c.createGain();
+        os.type = 'sine'; os.frequency.value = 2900; lfo.frequency.value = 32; lg.gain.value = 140; lfo.connect(lg); lg.connect(os.frequency);
+        g.gain.setValueAtTime(0.0001, t + d); g.gain.exponentialRampToValueAtTime(0.6, t + d + 0.02); g.gain.setValueAtTime(0.6, t + d + 0.33); g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.4);
+        os.connect(g); g.connect(o); os.start(t + d); lfo.start(t + d); os.stop(t + d + 0.42); lfo.stop(t + d + 0.42);
+        noise(c, o, t + d, 0.4, { peak: 0.12, freq: 2900, q: 3 });
+      }); return 1; } },
+    { id: 'alarm', name: 'Alarma', ic: '🚨', play: (c, o, t) => { for (let i = 0; i < 10; i++) tone(c, o, t + i * 0.15, i % 2 ? 1100 : 880, 0.14, { type: 'sawtooth', peak: 0.35, hold: 0.9 }); return 1.5; } },
+    { id: 'siren', name: 'Sirena', ic: '🚓', play: (c, o, t) => { [0, 0.8].forEach(d => { tone(c, o, t + d, 650, 0.4, { type: 'sawtooth', peak: 0.3, hold: 0.95, glide: 1500 }); tone(c, o, t + d + 0.4, 1500, 0.4, { type: 'sawtooth', peak: 0.3, hold: 0.95, glide: 650 }); }); return 1.6; } },
+    { id: 'arcade', name: 'Arcade', ic: '👾', play: (c, o, t) => { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(c, o, t + i * 0.07, f, 0.07, { peak: 0.3, hold: 0.9 })); tone(c, o, t + 0.36, 1568, 0.3, { peak: 0.35 }); return 0.7; } },
+    { id: 'fanfare', name: 'Fanfarria', ic: '🎺', play: (c, o, t) => { [[392, 0.15], [523, 0.15], [659, 0.15], [784, 0.7]].reduce((at, [f, d]) => { tone(c, o, at, f, d, { type: 'sawtooth', peak: 0.3, att: 0.03, hold: 0.8 }); tone(c, o, at, f * 2, d, { type: 'sine', peak: 0.15, att: 0.03, hold: 0.8 }); return at + d + 0.03; }, t); return 1.3; } },
+    { id: 'drums', name: 'Tambores', ic: '🥁', play: (c, o, t) => { [0, 0.18, 0.36, 0.48, 0.6].forEach((d, i) => { tone(c, o, t + d, i === 4 ? 70 : 110, 0.25, { type: 'sine', peak: 0.9, att: 0.003, hold: 0.05, glide: 45 }); noise(c, o, t + d, 0.12, { peak: 0.5, freq: 1800, q: 0.7 }); }); return 1; } },
+    { id: 'countdown', name: 'Cuenta atrás (3, 2, 1… ¡ya!)', ic: '⏱️', play: (c, o, t) => { [0, 0.5, 1].forEach(d => tone(c, o, t + d, 880, 0.18, { type: 'square', peak: 0.35 })); tone(c, o, t + 1.5, 1760, 0.6, { type: 'square', peak: 0.4 }); return 2.1; } },
+    { id: 'soft', name: 'Suave', ic: '🍃', play: (c, o, t) => { tone(c, o, t, 660, 0.6, { type: 'sine', peak: 0.6, att: 0.08, hold: 0.3 }); tone(c, o, t + 0.35, 880, 0.8, { type: 'sine', peak: 0.6, att: 0.08, hold: 0.3 }); return 1.2; } }
+  ];
+  const soundById = id => SOUNDS.find(x => x.id === id) || SOUNDS[0];
+  // Aviso sonoro: el sonido elegido en Ajustes, a través de un compresor para que suene fuerte sin distorsionar.
+  // Volumen: 1 normal, 2 alto (por defecto), 3 máximo (además lo repite).
+  function playSound(id, force) {
     const s = S().settings; if (!s.sound && !force) return;
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
       if (actx.state === 'suspended') actx.resume(); // el móvil lo "duerme" al cambiar de app
-      const vol = s.soundVol || 2, peak = [0, 0.45, 0.8, 1][vol], n = vol === 3 ? times + 2 : times;
+      const vol = s.soundVol || 2;
       const comp = actx.createDynamicsCompressor(); comp.threshold.value = -18; comp.knee.value = 6; comp.ratio.value = 6;
-      const master = actx.createGain(); master.gain.value = vol === 1 ? 1 : 1.8;
-      comp.connect(master); master.connect(actx.destination);
-      const t0 = actx.currentTime + 0.02, len = 0.32, gap = 0.14;
-      for (let i = 0; i < n; i++) {
-        const st = t0 + i * (len + gap), last = i === n - 1;
-        const o = actx.createOscillator(), g = actx.createGain();
-        o.type = vol === 1 ? 'triangle' : 'square'; o.frequency.value = last ? 1760 : 1320;
-        g.gain.setValueAtTime(0.0001, st);
-        g.gain.exponentialRampToValueAtTime(peak * (vol === 1 ? 1 : 0.5), st + 0.015);
-        g.gain.setValueAtTime(peak * (vol === 1 ? 1 : 0.5), st + len - 0.05);
-        g.gain.exponentialRampToValueAtTime(0.0001, st + (last ? len + 0.15 : len));
-        o.connect(g); g.connect(comp); o.start(st); o.stop(st + len + 0.2);
-      }
+      comp.attack.value = 0.002;
+      // Limitador suave al final: los golpes de campana/gong no "rascan" el altavoz aunque el volumen sea alto
+      const master = actx.createGain(); master.gain.value = [0, 0.7, 1.6, 2][vol] / 2;
+      const lim = actx.createWaveShaper(), cv = new Float32Array(1025); for (let i = 0; i < cv.length; i++) { const x = i / 512 - 1; cv[i] = Math.tanh(2.5 * x) / Math.tanh(2.5); } lim.curve = cv;
+      comp.connect(master); master.connect(lim); lim.connect(actx.destination);
+      const snd = soundById(id || s.soundId), t0 = actx.currentTime + 0.03;
+      const d = snd.play(actx, comp, t0);
+      if (vol === 3) snd.play(actx, comp, t0 + d + 0.15);
     } catch (e) { }
+  }
+  const beep = (times, force) => playSound(null, force);
+  // Lista de sonidos: al tocar uno suena y queda elegido
+  function openSoundPicker(onDone) {
+    openLayer({
+      html: () => {
+        const cur = soundById(S().settings.soundId).id;
+        return `<div class="screen"><div class="page">
+          <div class="page-head"><button class="icon-btn ghost back-btn" data-act="back">${ic('back')}</button><h1>Sonido del aviso</h1></div>
+          <p class="muted" style="margin:0 0 12px;font-size:14px">Toca uno para escucharlo; se queda elegido el último que toques.</p>
+          ${SOUNDS.map(x => `<button class="sheet-opt sound-opt ${x.id === cur ? 'on' : ''}" data-act="pick" data-id="${x.id}"><span class="snd-ic">${x.ic}</span><span>${x.name}</span>${x.id === cur ? `<span style="margin-left:auto;color:var(--orange)">${ic('check')}</span>` : `<span style="margin-left:auto" class="muted">${ic('play')}</span>`}</button>`).join('')}
+        </div></div>`;
+      },
+      onClose: () => onDone && onDone(),
+      actions: {
+        back: (t, e, L) => L.close(),
+        pick: (t, e, L) => { S().settings.soundId = t.dataset.id; save(); playSound(t.dataset.id, true); vibrate(40); L.render(); }
+      }
+    });
   }
   const vibrate = p => { if (S().settings.vibrate && navigator.vibrate) navigator.vibrate(p); };
   function confetti() {
@@ -1462,7 +1527,7 @@
   }
   function celebrate(w, prs, extra = {}) {
     const n = S().workouts.length, st = Store.workoutStats(w), na = extra.newAch || [];
-    confetti(); beep(2);
+    confetti(); playSound('fanfare');
     openLayer({
       transient: true,
       html: () => `<div class="backdrop"></div><div class="modal" style="padding:0;overflow:hidden">
@@ -1819,6 +1884,7 @@
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Descanso por defecto</div><div class="sr-sub">${fmtRest(s.restDefault)}</div></div><button class="btn sm" data-act="rest">Cambiar</button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Aviso de descanso en segundo plano</div><div class="sr-sub">${notifState}</div></div><button class="toggle ${canNotify() ? 'on' : ''}" data-act="notify"></button></div>
           <div class="setting-row"><div class="sr-main"><div class="sr-title">Sonido al terminar descanso</div></div><button class="toggle ${s.sound ? 'on' : ''}" data-act="tog" data-k="sound"></button></div>
+          ${s.sound ? `<div class="setting-row"><div class="sr-main"><div class="sr-title">Tipo de sonido</div><div class="sr-sub">${soundById(s.soundId).ic} ${soundById(s.soundId).name}</div></div><button class="btn sm" data-act="pickSound">Cambiar</button></div>` : ''}
           ${s.sound ? `<div class="setting-row"><div class="sr-main"><div class="sr-title">Volumen del aviso</div><div class="sr-sub">También depende del volumen multimedia del móvil</div></div>
             <div class="row-flex"><div class="seg" style="width:190px">${[[1, 'Normal'], [2, 'Alto'], [3, 'Máximo']].map(([v, l]) => `<button class="${(s.soundVol || 2) === v ? 'on' : ''}" data-act="vol" data-v="${v}">${l}</button>`).join('')}</div>
             <button class="btn sm" data-act="testSound">Probar</button></div></div>` : ''}
@@ -1883,6 +1949,7 @@
         tog: (t, e, L) => { const k = t.dataset.k; S().settings[k] = !S().settings[k]; save(); L.render(); },
         vol: (t, e, L) => { S().settings.soundVol = +t.dataset.v; save(); L.render(); beep(3, true); },
         testSound: () => { beep(3, true); vibrate([300, 150, 300]); },
+        pickSound: (t, e, L) => openSoundPicker(() => L.render()),
         rem: async (t, e, L) => {
           const r = remCfg(), k = t.dataset.k; r[k] = !r[k];
           S().settings.rem = r; save(); L.render(); syncReminders();
