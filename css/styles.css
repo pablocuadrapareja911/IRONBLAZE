@@ -706,3 +706,6 @@ h2.section .mini-seg { text-transform: none; letter-spacing: 0; }
 .photo-claim span { flex: 1; }
 /* App Check (reCAPTCHA v3): se oculta la insignia flotante; el aviso legal va en Ajustes y en la política de privacidad */
 .grecaptcha-badge { visibility: hidden !important; }
+/* Selector de sonido del aviso */
+.sound-opt.on { background: var(--orange-soft); border-radius: 12px; }
+.sound-opt .snd-ic { font-size: 22px; width: 32px; text-align: center; flex-shrink: 0; }
