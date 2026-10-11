@@ -631,6 +631,7 @@ h2.section .mini-seg { text-transform: none; letter-spacing: 0; }
 .hyp-arrows path { fill: none; stroke: var(--orange); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
 .hyp-floor { stroke: #e2e2e2; stroke-width: 2; }
 .hyp-machine { fill: #c9c9cf; } .hyp-pulley { fill: #8a8a92; } .hyp-cable { stroke: #8a8a92; stroke-width: 2; } .hyp-cuff { fill: var(--orange); }
+.hyp-limb.hyp-hi { stroke: var(--orange); } .hyp-hi-f { fill: var(--orange); }
 .hyp-mat { fill: #ffd8bd; }
 .hyp-lbl { font: 800 12px Inter, system-ui, sans-serif; fill: var(--orange); }
 .hyp-track { fill: #eee; }
