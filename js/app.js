@@ -791,7 +791,7 @@
               <button class="icon-btn ghost" style="width:34px;height:34px;color:var(--muted)" data-act="delSet" data-e="${ei}" data-s="${si}">${ic('close')}</button></div>`).join('')}
             <button class="add-set" data-act="addSet" data-e="${ei}">+ Añadir serie</button></div>`;
         }).join('')}</div>
-        ${draft.exercises.length ? '' : `<div class="empty"><div class="big">🏋️</div><h4>Empieza añadiendo un ejercicio</h4><p>Busca entre casi 2000 ejercicios con animación o fotos.</p></div>`}
+        ${draft.exercises.length ? '' : `<div class="empty"><div class="big">🏋️</div><h4>Empieza añadiendo un ejercicio</h4><p>Busca entre más de 1800 ejercicios con animación o fotos.</p></div>`}
         <button class="btn primary block mt" data-act="add">${ic('plus')} Añadir ejercicio</button>
         ${draft.exercises.length > 1 ? `<button class="btn block mt-s" data-act="reorder">${ic('swap')} Reordenar ejercicios</button>` : ''}
       </div></div>`;
@@ -1092,6 +1092,7 @@
                 <span class="media-badge">HD · INICIO ⇄ FINAL</span></div>` :
             `<div class="ex-media gif"><span class="loading">Cargando animación…</span><img src="${Store.GIF(ex.i)}" alt="${esc(ex.n)}" data-media><span class="media-badge">▶ ANIMACIÓN</span></div>`}
           ${hd && !ex.custom && !ex.ph ? `<div class="seg mt-s"><button class="${mode === 'hd' ? 'on' : ''}" data-act="media" data-v="hd">📷 Fotos HD</button><button class="${mode === 'gif' ? 'on' : ''}" data-act="media" data-v="gif">▶ Animación</button></div>` : ''}
+          ${ex.pn ? `<div class="muted" style="font-size:12px;margin-top:6px">📷 ${esc(ex.pn)}</div>` : ''}
           <div class="ex-title">${esc(ex.n)}</div>
           ${ex.esn && !ex.hyp ? `<div class="muted" style="font-size:13px;margin:-4px 0 8px">${esc(cap(ex.en))}</div>` : ''}
           <div class="tags">${ex.b.map(b => `<span class="tag o">${tr('bodyParts', b)}</span>`).join('')}${ex.q.map(q => `<span class="tag">${tr('equipment', q)}</span>`).join('')}${ex.custom ? '<span class="tag">Personalizado</span>' : ''}</div>
@@ -1242,7 +1243,7 @@
       ${stats}
       <div style="padding:12px 16px 0"><input class="title-input" data-field="title" value="${esc(w.title)}" placeholder="Nombre del entreno"></div>
       ${w.exercises.length ? w.exercises.map((e, ei) => awExHTML(L, e, ei, ssm)).join('') :
-        `<div class="empty-aw"><div class="big">💪</div><h4>Empieza añadiendo un ejercicio</h4><p>Toca el botón de abajo para elegir entre casi 2000 ejercicios.</p></div>`}
+        `<div class="empty-aw"><div class="big">💪</div><h4>Empieza añadiendo un ejercicio</h4><p>Toca el botón de abajo para elegir entre más de 1800 ejercicios.</p></div>`}
       <div class="aw-footer">
         <button class="btn primary block" data-act="addEx">${ic('plus')} Añadir ejercicio</button>
         <div class="row-flex">${w.exercises.length > 1 ? `<button class="btn block" data-act="reorder">${ic('swap')} Reordenar</button>` : ''}<button class="btn block" data-act="notes">${ic('note')} Notas</button></div>

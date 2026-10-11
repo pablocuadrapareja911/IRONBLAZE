@@ -6,7 +6,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.8.9';
+  const VERSION = '1.9.0';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -48,6 +48,8 @@
   const num = x => (x === '' || x == null || !isFinite(+x)) ? '' : +x;
   const ident = x => str(x, 64).replace(/[^\w.-]/g, '');
   const arr = x => Array.isArray(x) ? x : [];
+  const ALIAS = window.EXERCISE_ALIAS || {}; // ejercicios retirados → su equivalente
+  const exIdent = x => { const id = ident(x); return ALIAS[id] || id; };
   function cleanSet(s, withTargets) {
     s = s || {};
     const o = { type: S_TYPES.includes(s.type) ? s.type : 'n', w: num(s.w), r: num(s.r) };
@@ -61,7 +63,7 @@
   }
   function cleanEx(e, withTargets) {
     e = e || {};
-    return { exId: ident(e.exId), notes: str(e.notes, 2000), ...(e.pin ? { pin: str(e.pin, 2000) } : {}), ss: e.ss ? ident(e.ss) : null, rest: num(e.rest) === '' ? null : Math.max(0, Math.min(3600, num(e.rest))), sets: arr(e.sets).slice(0, 100).map(s => cleanSet(s, withTargets)) };
+    return { exId: exIdent(e.exId), notes: str(e.notes, 2000), ...(e.pin ? { pin: str(e.pin, 2000) } : {}), ss: e.ss ? ident(e.ss) : null, rest: num(e.rest) === '' ? null : Math.max(0, Math.min(3600, num(e.rest))), sets: arr(e.sets).slice(0, 100).map(s => cleanSet(s, withTargets)) };
   }
   // active = entreno en curso: conserva los objetivos de cada serie y aún no tiene fin
   function sanitizeWorkout(w, active) {
@@ -193,7 +195,7 @@
     if (e.en) continue;
     e.en = e.n;
     const es = ES[e.i];
-    // es = pasos en español · esn = nombre en español (ES_NAMES solo trae el nombre; los pasos siguen en inglés)
+    // es = pasos en español · esn = nombre en español (ES_NAMES solo trae el nombre; los pasos llegan después desde exercises-text.js)
     if (es) { e.n = es.n; e.x = es.x; e.es = e.esn = true; }
     else { e.esn = !!ESN[e.i]; e.n = ESN[e.i] || e.n.charAt(0).toUpperCase() + e.n.slice(1); if (!e.x) e.x = []; }
   }
@@ -223,7 +225,7 @@
   indexExercises();
 
   function allExercises() { return [...state.custom, ...window.EXERCISE_DB]; }
-  function getEx(id) { return byId.get(id) || { i: id, n: 'Ejercicio eliminado', b: ['other'], q: ['none'], t: [], s: [], x: [], custom: true }; }
+  function getEx(id) { return byId.get(id) || byId.get(ALIAS[id]) || { i: id, n: 'Ejercicio eliminado', b: ['other'], q: ['none'], t: [], s: [], x: [], custom: true }; }
 
   // Tipo de registro: peso+reps, peso corporal (reps + lastre opcional), cardio (distancia + tiempo), tiempo
   function kind(ex) {
@@ -293,7 +295,11 @@
     return cached('h|' + exId, () => {
       const out = [];
       for (const { w, ex } of exIndex().get(exId) || []) {
-        if (ex.sets.some(s => s.done)) out.push({ workout: w, sets: ex.sets.filter(s => s.done), notes: ex.notes || '' });
+        const sets = ex.sets.filter(s => s.done); if (!sets.length) continue;
+        // el mismo ejercicio dos veces en un entreno (p. ej. una variante retirada + el original): una sola tarjeta
+        const prev = out[out.length - 1];
+        if (prev && prev.workout === w) { prev.sets = prev.sets.concat(sets); if (ex.notes) prev.notes = [prev.notes, ex.notes].filter(Boolean).join(' · '); }
+        else out.push({ workout: w, sets, notes: ex.notes || '' });
       }
       return out.sort((a, b) => b.workout.start - a.workout.start);
     });
