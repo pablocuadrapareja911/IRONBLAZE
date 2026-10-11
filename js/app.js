@@ -116,6 +116,9 @@
     if (ex.custom) return `<div class="thumb custom ${cls}">${esc(ex.n.charAt(0).toUpperCase())}</div>`;
     return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" decoding="async" data-rm-err></div>`;
   }
+  // Ajusta la altura de las notas a su texto (el CSS lo hace solo en navegadores con field-sizing)
+  const fitNote = t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
+  const FIELD_SIZING = window.CSS && CSS.supports && CSS.supports('field-sizing', 'content');
   const exSub = ex => `${tr('bodyParts', ex.b[0])} · ${tr('equipment', ex.q[0])}`;
 
   // ---------------- Foto de perfil ----------------
@@ -327,6 +330,7 @@
         const sc = el.querySelector('.screen,.sheet'); const top = sc ? sc.scrollTop : 0;
         el.innerHTML = def.html(L);
         const sc2 = el.querySelector('.screen,.sheet'); if (sc2 && top) { sc2.style.animation = 'none'; sc2.scrollTop = top; }
+        if (!FIELD_SIZING) el.querySelectorAll('.aw-note').forEach(t => { if (t.value) fitNote(t); });
         def.bind && def.bind(el, L);
       },
       close(silent) {
@@ -775,6 +779,7 @@
           return `<div class="re-ex ${ss ? 'in-ss' : ''} ${ex.hyp ? 'no-w' : ''}" ${ss ? `style="--ss:${ss.color}"` : ''}>
             ${ssTag(ss)}
             <div class="re-head">${thumb(ex, 'sm')}<div class="nm" data-act="info" data-e="${ei}">${esc(ex.n)}</div><button class="icon-btn ghost" data-act="exMenu" data-e="${ei}">${ic('more')}</button></div>
+            <textarea class="aw-note" rows="1" data-f="note" data-e="${ei}" placeholder="📌 Nota fija: asiento, agarre, cómo hacerlo…">${esc(e.notes || '')}</textarea>
             <button class="aw-rest" data-act="rest" data-e="${ei}">${ic('clock')} Descanso: ${fmtRest(e.rest ?? S().settings.restDefault)}</button>
             <div class="re-set head"><span>SERIE</span><span>${ex.hyp ? '' : c[0]}</span><span>${c[1]}</span><span></span></div>
             ${e.sets.map((s, si) => `<div class="re-set"><button class="set-num ${s.type}" data-act="type" data-e="${ei}" data-s="${si}">${typeLabel[s.type] || e.sets.slice(0, si + 1).filter(x => x.type === 'n' || x.type === 'f').length}</button>
@@ -791,6 +796,7 @@
       onInput: e => {
         const t = e.target, f = t.dataset.f; if (!f) return;
         if (f === 'name') { draft.name = t.value; return; }
+        if (f === 'note') { draft.exercises[+t.dataset.e].notes = t.value; if (!FIELD_SIZING) fitNote(t); return; }
         const ex = draft.exercises[+t.dataset.e], k = Store.kind(Store.getEx(ex.exId)), s = ex.sets[+t.dataset.s];
         if (f === 'w') s.w = parseVal(k, t.value); else s.r = t.value === '' ? '' : parseFloat(t.value);
       },
@@ -817,7 +823,7 @@
           const v = await sheet({ options: [{ label: 'Ver técnica', icon: 'info', value: 'info' }, { label: arr[i].ss ? 'Editar superserie' : 'Crear superserie', icon: 'link', value: 'ss' }, { label: 'Reemplazar ejercicio', icon: 'swap', value: 'rep' }, arr.length > 1 && { label: 'Reordenar ejercicios', icon: 'drag', value: 'order' }, { label: 'Quitar ejercicio', icon: 'trash', danger: true, value: 'del' }] });
           if (v === 'info') openExerciseDetail(arr[i].exId);
           if (v === 'ss') { if (await supersetMenu(arr, i)) L.render(); return; }
-          if (v === 'rep') openPicker({ multi: false, onPick: ids => { arr[i].exId = ids[0]; L.render(); } });
+          if (v === 'rep') openPicker({ multi: false, onPick: ids => { arr[i].exId = ids[0]; arr[i].notes = ''; L.render(); } });
           if (v === 'order') openReorder(arr, order => { applyOrder(arr, order); L.render(); });
           if (v === 'del') { arr.splice(i, 1); cleanupSS(arr); }
           L.render();
@@ -907,7 +913,7 @@
       const sel = opts.selected && opts.selected.has(e.i), n = usage.get(e.i);
       if (f.view === 'grid') {
         return `<div class="ex-card ${sel ? 'selected' : ''}" data-id="${e.i}">
-          <div class="ex-card-media">${e.hyp ? HYPO.svg(e.pose, { mini: true }) : e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err>`}
+          <div class="ex-card-media">${e.hyp ? HYPO.svg(e.pose, { mini: true }) : e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" ${e.th ? 'class="ph" ' : ''}src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err>`}
             ${Store.HD(e.i) ? '<span class="hd-badge">HD</span>' : ''}
             ${opts.selectable ? `<div class="check-dot">${sel ? ic('check') : ''}</div>` : ''}</div>
           <div class="ex-card-body"><div class="ex-card-name">${esc(e.n)}</div><div class="ex-card-sub">${exSub(e)}${n ? ` · <span style="color:var(--orange)">${n}×</span>` : ''}</div></div></div>`;
@@ -1054,7 +1060,7 @@
     const ex = Store.getEx(id), k = Store.kind(ex);
     const enName = ex.en || ex.n;
     const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent('how to ' + enName + ' proper form')}`;
-    const ytEs = `https://www.youtube.com/results?search_query=${encodeURIComponent(ex.yt || 'cómo hacer ' + (ex.es ? ex.n : enName) + ' técnica')}`;
+    const ytEs = `https://www.youtube.com/results?search_query=${encodeURIComponent(ex.yt || 'cómo hacer ' + (ex.esn ? ex.n : enName) + ' técnica')}`;
     // Si las instrucciones aún no han llegado (se cargan en segundo plano), se pinta ya y se completa al llegar
     if (!Store.exerciseTextReady() && !ex.custom && !ex.es) Store.loadExerciseText().then(() => { const l = stack.find(x => x.def.exId === id); if (l) l.render(); });
     openLayer({
@@ -1071,9 +1077,9 @@
                 <img class="f0" src="${hd[0]}" alt="${esc(ex.n)}" data-media>${hd[1] ? `<img class="f1" src="${hd[1]}" alt="">` : ''}
                 <span class="media-badge">HD · INICIO ⇄ FINAL</span></div>` :
             `<div class="ex-media gif"><span class="loading">Cargando animación…</span><img src="${Store.GIF(ex.i)}" alt="${esc(ex.n)}" data-media><span class="media-badge">▶ ANIMACIÓN</span></div>`}
-          ${hd && !ex.custom ? `<div class="seg mt-s"><button class="${mode === 'hd' ? 'on' : ''}" data-act="media" data-v="hd">📷 Fotos HD</button><button class="${mode === 'gif' ? 'on' : ''}" data-act="media" data-v="gif">▶ Animación</button></div>` : ''}
+          ${hd && !ex.custom && !ex.ph ? `<div class="seg mt-s"><button class="${mode === 'hd' ? 'on' : ''}" data-act="media" data-v="hd">📷 Fotos HD</button><button class="${mode === 'gif' ? 'on' : ''}" data-act="media" data-v="gif">▶ Animación</button></div>` : ''}
           <div class="ex-title">${esc(ex.n)}</div>
-          ${ex.es && !ex.hyp ? `<div class="muted" style="font-size:13px;margin:-4px 0 8px">${esc(cap(ex.en))}</div>` : ''}
+          ${ex.esn && !ex.hyp ? `<div class="muted" style="font-size:13px;margin:-4px 0 8px">${esc(cap(ex.en))}</div>` : ''}
           <div class="tags">${ex.b.map(b => `<span class="tag o">${tr('bodyParts', b)}</span>`).join('')}${ex.q.map(q => `<span class="tag">${tr('equipment', q)}</span>`).join('')}${ex.custom ? '<span class="tag">Personalizado</span>' : ''}</div>
           ${ex.custom ? '' : `<div class="quick-grid mt"><a class="btn yt-btn" href="${ytUrl}" target="_blank" rel="noopener">${ic('yt')} Vídeo (EN)</a><a class="btn yt-btn" style="background:#b30024" href="${ytEs}" target="_blank" rel="noopener">${ic('yt')} Vídeo (ES)</a></div>`}
           <h2 class="section">Músculos</h2>
@@ -1086,7 +1092,7 @@
           ${ex.x.length ? `<h2 class="section">Cómo se hace ${!ex.custom && !ex.es ? `<a class="link" href="${trUrl}" target="_blank" rel="noopener" style="font-size:13px">${ic('globe', 'ico')} Traducir</a>` : ''}</h2><ol class="steps">${ex.x.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : (!ex.custom && !ex.es && !Store.exerciseTextReady() ? '<h2 class="section">Cómo se hace</h2><p class="muted" style="font-size:13px">Cargando instrucciones…</p>' : '')}
           ${ex.hyp ? HYPO.info(ex) : ''}
           ${rec.e1rm || rec.reps ? `<h2 class="section">Tus mejores marcas</h2>${recGrid(k, rec)}` : ''}`;
-        if (t === 'hist') body = hist.length ? hist.map(h => `<div class="hist-card"><div class="hc-t">${esc(h.workout.title)}</div><div class="hc-d">${fmtDate(h.workout.start, true)}</div>
+        if (t === 'hist') body = hist.length ? hist.map(h => `<div class="hist-card"><div class="hc-t">${esc(h.workout.title)}</div><div class="hc-d">${fmtDate(h.workout.start, true)}</div>${h.notes ? `<div class="hc-note">💬 ${esc(h.notes)}</div>` : ''}
             ${h.sets.map((s, i) => `<div class="hc-s"><b style="color:${typeColor(s.type)}">${typeLabel[s.type] || h.sets.slice(0, i + 1).filter(x => x.type !== 'w' && x.type !== 'd').length}</b><span style="flex:1">${setText(k, s)}</span>${k === 'weight' && s.type !== 'w' ? `<span class="muted" style="font-size:12px">1RM ${nf(Store.toDisplay(Store.e1rm(+s.w, +s.r)))}</span>` : ''}</div>`).join('')}</div>`).join('')
           : `<div class="empty"><div class="big">📉</div><h4>Sin historial todavía</h4><p>Cuando registres este ejercicio aparecerán aquí tus sesiones.</p></div>`;
         if (t === 'chart') {
@@ -1171,7 +1177,7 @@
     S().active = {
       id: Store.uid(), title: routine ? routine.name : defaultTitle(), start: Date.now(), routineId: routine && routine.id && S().routines.some(r => r.id === routine.id) ? routine.id : null, notes: '',
       exercises: routine ? routine.exercises.map(e => ({
-        exId: e.exId, notes: '', rest: e.rest ?? null, ss: e.ss || null,
+        exId: e.exId, notes: '', ...(e.notes ? { pin: e.notes } : {}), rest: e.rest ?? null, ss: e.ss || null,
         sets: e.sets.map(s => ({ type: s.type || 'n', w: '', r: '', tw: s.w !== '' ? s.w : undefined, tr: s.r !== '' ? s.r : undefined, done: false }))
       })) : []
     };
@@ -1234,11 +1240,15 @@
     const ex = Store.getEx(e.exId), k = Store.kind(ex), c = cols(k), prev = prevFor(L, e.exId);
     const rest = e.rest ?? S().settings.restDefault, ss = e.ss && ssm[e.ss];
     const tip = act && e.sets.some(s => !s.done) ? progressionTip(e, prev, k) : null;
+    const pin = act && e.pin;
+    const last = act && (Store.exerciseHistory(e.exId).find(h => h.workout.id !== w.id && h.notes) || {}).notes;
     let n = 0;
     return `<div class="aw-ex ${ss ? 'in-ss' : ''}" ${ss ? `style="--ss:${ss.color}"` : ''}>
       ${ssTag(ss)}
       <div class="aw-ex-head"><span data-act="info" data-e="${ei}" style="cursor:pointer">${thumb(ex)}</span><div class="nm" data-act="info" data-e="${ei}">${esc(ex.n)}</div><button class="icon-btn ghost" data-act="exMenu" data-e="${ei}">${ic('more')}</button></div>
-      <textarea class="aw-note" rows="1" data-field="note" data-e="${ei}" placeholder="Añadir notas aquí…">${esc(e.notes || '')}</textarea>
+      ${pin ? `<div class="pin-note">📌 ${esc(pin)}</div>` : ''}
+      ${last ? `<div class="last-note">💬 <b>Última vez:</b> ${esc(last)}</div>` : ''}
+      <textarea class="aw-note" rows="1" data-field="note" data-e="${ei}" placeholder="💬 Añadir comentario…">${esc(e.notes || '')}</textarea>
       ${act ? `<button class="aw-rest" data-act="restPick" data-e="${ei}">${ic('clock')} Descanso: ${fmtRest(rest)}${ss && w.exercises.slice(ei + 1).some(x => x.ss === e.ss) ? ' · <span class="muted">tras la superserie</span>' : ''}</button>` : ''}
       ${tip ? `<div class="tip-line ${tip.up ? 'up' : ''}">${ic('bulb')}<span><b>${tip.up ? '¡Hora de subir! ' : 'Objetivo: '}${tip.text}</b><small>${tip.why}</small></span><button class="btn sm" data-act="applyTip" data-e="${ei}">Aplicar</button></div>` : ''}
       <div class="set-table ${ex.hyp ? 'no-w' : ''}">
@@ -1266,7 +1276,7 @@
     if (f === 'title') { w.title = t.value; persist(); if (isAct(L)) updateChrome(); return; }
     if (f === 'start') { const v = new Date(t.value).getTime(); if (!isNaN(v)) { const dur = w.end - w.start; w.start = v; w.end = v + dur; } return; }
     if (f === 'dur') { const m = parseFloat(t.value); if (m > 0) w.end = w.start + m * 6e4; return; }
-    if (f === 'note') { w.exercises[+t.dataset.e].notes = t.value; t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; persist(); return; }
+    if (f === 'note') { w.exercises[+t.dataset.e].notes = t.value; if (!FIELD_SIZING) fitNote(t); persist(); return; }
     const row = t.closest('.set-row'), ex = w.exercises[+row.dataset.e], s = ex.sets[+row.dataset.s];
     const k = Store.kind(Store.getEx(ex.exId));
     if (f === 'w') s.w = parseVal(k, t.value);
@@ -1512,7 +1522,7 @@
           S().workouts.unshift(w);
           S().workouts.sort((x, y) => y.start - x.start);
           if (routine && draft.updateRoutine) {
-            routine.exercises = a.exercises.filter(e => e.sets.some(s => s.done)).map(e => ({ exId: e.exId, rest: e.rest, ss: e.ss || null, sets: e.sets.filter(s => s.done).map(s => ({ type: s.type, w: s.w, r: s.r })) }));
+            routine.exercises = a.exercises.filter(e => e.sets.some(s => s.done)).map(e => ({ exId: e.exId, notes: e.pin || '', rest: e.rest, ss: e.ss || null, sets: e.sets.filter(s => s.done).map(s => ({ type: s.type, w: s.w, r: s.r })) }));
             cleanupSS(routine.exercises);
           }
           S().active = null; stopRest();
@@ -1567,7 +1577,7 @@
           ${w.exercises.map(e => {
           const ex = Store.getEx(e.exId), k = Store.kind(ex), ss = e.ss && ssm[e.ss]; let n = 0;
           return `<div class="card ${ss ? 'in-ss' : ''}" ${ss ? `style="--ss:${ss.color}"` : ''}>${ssTag(ss)}<div class="row-flex" data-act="ex" data-id="${ex.i}" style="cursor:pointer">${thumb(ex)}<div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--orange)">${esc(ex.n)} ${prSet.has(e.exId) ? '🏆' : ''}</div><div class="muted" style="font-size:12px">${exSub(ex)}</div></div></div>
-              ${e.notes ? `<div class="muted mt-s" style="font-size:13px;font-style:italic">${esc(e.notes)}</div>` : ''}
+              ${e.notes ? `<div class="hc-note">${esc(e.notes)}</div>` : ''}
               <div class="mt-s">${e.sets.map(s => { if (s.type === 'n' || s.type === 'f') n++; return `<div class="hc-s" style="padding:6px 0;border-top:1px solid var(--line)"><b style="color:${typeColor(s.type)}">${s.type === 'n' ? n : typeLabel[s.type]}</b><span>${setText(k, s)}</span></div>`; }).join('')}</div></div>`;
         }).join('')}
         </div></div>`;

@@ -1,11 +1,12 @@
 // ============ IRONBLAZE · Estado, persistencia y analítica ============
 (function () {
   const KEY = 'ironblaze.v1';
-  const GIF = id => `https://static.exercisedb.dev/media/${id}.gif`;
+  // Los ejercicios solo con fotos (ph) usan la primera foto HD como miniatura
+  const GIF = id => { const e = byId.get(id); return (e && e.th) || `https://static.exercisedb.dev/media/${id}.gif`; };
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.8.3';
+  const VERSION = '1.8.4';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -60,7 +61,7 @@
   }
   function cleanEx(e, withTargets) {
     e = e || {};
-    return { exId: ident(e.exId), notes: str(e.notes, 2000), ss: e.ss ? ident(e.ss) : null, rest: num(e.rest) === '' ? null : Math.max(0, Math.min(3600, num(e.rest))), sets: arr(e.sets).slice(0, 100).map(s => cleanSet(s, withTargets)) };
+    return { exId: ident(e.exId), notes: str(e.notes, 2000), ...(e.pin ? { pin: str(e.pin, 2000) } : {}), ss: e.ss ? ident(e.ss) : null, rest: num(e.rest) === '' ? null : Math.max(0, Math.min(3600, num(e.rest))), sets: arr(e.sets).slice(0, 100).map(s => cleanSet(s, withTargets)) };
   }
   function sanitizeWorkout(w, withTargets) {
     w = w || {};
@@ -185,14 +186,17 @@
   // ---------- Ejercicios ----------
   const byId = new Map();
   // Aplica nombres/instrucciones en español (una sola vez) y pone mayúscula inicial
-  const ES = window.ES_CONTENT || {};
+  const ES = window.ES_CONTENT || {}, ESN = window.ES_NAMES || {};
   for (const e of window.EXERCISE_DB) {
+    if (e.ph) e.th = HD(e.i)[0]; // miniatura de los ejercicios que solo tienen fotos
     if (e.en) continue;
     e.en = e.n;
     const es = ES[e.i];
-    if (es) { e.n = es.n; e.x = es.x; e.es = true; }
-    else { e.n = e.n.charAt(0).toUpperCase() + e.n.slice(1); if (!e.x) e.x = []; }
+    // es = pasos en español · esn = nombre en español (ES_NAMES solo trae el nombre; los pasos siguen en inglés)
+    if (es) { e.n = es.n; e.x = es.x; e.es = e.esn = true; }
+    else { e.esn = !!ESN[e.i]; e.n = ESN[e.i] || e.n.charAt(0).toUpperCase() + e.n.slice(1); if (!e.x) e.x = []; }
   }
+  delete window.ES_NAMES; // ya aplicado: no hace falta mantenerlo en memoria
   // Las instrucciones en inglés van en un archivo aparte (pesan el 80% de los datos) y se cargan
   // en segundo plano después de arrancar: así la app se abre mucho antes.
   let textP = null;
@@ -288,7 +292,7 @@
     return cached('h|' + exId, () => {
       const out = [];
       for (const { w, ex } of exIndex().get(exId) || []) {
-        if (ex.sets.some(s => s.done)) out.push({ workout: w, sets: ex.sets.filter(s => s.done) });
+        if (ex.sets.some(s => s.done)) out.push({ workout: w, sets: ex.sets.filter(s => s.done), notes: ex.notes || '' });
       }
       return out.sort((a, b) => b.workout.start - a.workout.start);
     });
