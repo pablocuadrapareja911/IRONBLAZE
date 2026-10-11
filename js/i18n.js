@@ -11,7 +11,7 @@ window.I18N = {
     'ez barbell': 'Barra Z', 'hammer': 'Martillo', 'kettlebell': 'Kettlebell', 'leverage machine': 'Máquina',
     'medicine ball': 'Balón medicinal', 'olympic barbell': 'Barra olímpica', 'resistance band': 'Banda elástica',
     'roller': 'Rodillo', 'rope': 'Cuerda', 'skierg machine': 'SkiErg', 'sled machine': 'Prensa / trineo',
-    'smith machine': 'Multipower', 'stability ball': 'Fitball', 'stationary bike': 'Bici estática',
+    'smith machine': 'Multipower', 'stability ball': 'Fitball', 'stationary bike': 'Bici estática', 'rowing machine': 'Máquina de remo',
     'stepmill machine': 'Escaladora', 'tire': 'Neumático', 'trap bar': 'Barra hexagonal',
     'upper body ergometer': 'Ergómetro brazos', 'weighted': 'Lastrado', 'wheel roller': 'Rueda abdominal',
     'none': 'Ninguno'

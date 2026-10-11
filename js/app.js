@@ -792,7 +792,7 @@
               <button class="icon-btn ghost" style="width:34px;height:34px;color:var(--muted)" data-act="delSet" data-e="${ei}" data-s="${si}">${ic('close')}</button></div>`).join('')}
             <button class="add-set" data-act="addSet" data-e="${ei}">+ Añadir serie</button></div>`;
         }).join('')}</div>
-        ${draft.exercises.length ? '' : `<div class="empty"><div class="big">🏋️</div><h4>Empieza añadiendo un ejercicio</h4><p>Busca entre más de 1500 ejercicios con animación.</p></div>`}
+        ${draft.exercises.length ? '' : `<div class="empty"><div class="big">🏋️</div><h4>Empieza añadiendo un ejercicio</h4><p>Busca entre casi 2000 ejercicios con animación o fotos.</p></div>`}
         <button class="btn primary block mt" data-act="add">${ic('plus')} Añadir ejercicio</button>
         ${draft.exercises.length > 1 ? `<button class="btn block mt-s" data-act="reorder">${ic('swap')} Reordenar ejercicios</button>` : ''}
       </div></div>`;
@@ -875,7 +875,11 @@
   ];
   // Palabras que no aportan nada a la búsqueda ("patada de glúteo" = "patada glúteo")
   const STOP = new Set(['de', 'del', 'con', 'en', 'la', 'el', 'las', 'los', 'a', 'al', 'y', 'para', 'por']);
-  const words = q => norm(q).split(/\s+/).filter(w => w && !STOP.has(w));
+  const words = q => norm(q).replace(/-/g, ' ').split(/\s+/).filter(w => w && !STOP.has(w));
+  // Sinónimos habituales en el gimnasio: la palabra vale si aparece ella o cualquiera de estas
+  const SYN = { estrecho: ['cerrado'], estrecha: ['cerrado'], inversa: ['atras'], inverso: ['invertido'], gironda: ['sentado'], rompecraneos: ['frances'],
+    contractora: ['pec deck', 'contractor'], almeja: ['clamshell'], hidrante: ['fire hydrant'], ergometro: ['maquina de remo'], remadora: ['maquina de remo'],
+    abdominal: ['crunch'], pared: ['wall'], perro: ['bird dog', 'fire hydrant'], banda: ['goma'], goma: ['banda'] };
   function translateQuery(q) {
     let s = norm(q);
     for (const [es, en] of ES_EN) if (s.includes(es)) s = s.replace(es, en);
@@ -885,7 +889,7 @@
   function hay(e) {
     let h = hayCache.get(e.i);
     if (!h) {
-      h = norm([e.n, e.en || '', ...e.b, ...e.q, ...e.t, ...e.b.map(x => tr('bodyParts', x)), ...e.q.map(x => tr('equipment', x)), ...e.t.map(x => tr('muscles', x)), ...e.s.map(x => tr('muscles', x))].join(' '));
+      h = norm([e.n, e.en || '', ...e.b, ...e.q, ...e.t, ...e.b.map(x => tr('bodyParts', x)), ...e.q.map(x => tr('equipment', x)), ...e.t.map(x => tr('muscles', x)), ...e.s.map(x => tr('muscles', x))].join(' ')).replace(/-/g, ' ');
       hayCache.set(e.i, h);
     }
     return h;
@@ -939,7 +943,8 @@
     function apply() {
       // Los nombres ya están en español: vale que coincidan las palabras tal cual o su traducción al inglés
       const toks = translateQuery(f.q), esToks = words(f.q), raw = norm(f.q).trim();
-      const has = (h, t) => h.includes(t) || (t.length > 3 && t.endsWith('s') && h.includes(t.slice(0, -1)));
+      const has1 = (h, t) => h.includes(t) || (t.length > 3 && t.endsWith('s') && h.includes(t.slice(0, -1))) || (t.length > 4 && t.endsWith('es') && h.includes(t.slice(0, -2)));
+      const has = (h, t) => has1(h, t) || (SYN[t] || []).some(s => h.includes(s));
       items = Store.allExercises().filter(e => {
         if (f.bp !== 'all' && !e.b.includes(f.bp)) return false;
         if (f.eq !== 'all' && !e.q.includes(f.eq)) return false;
@@ -950,19 +955,21 @@
       });
       const nameScore = e => {
         if (!toks.length) return 0;
-        const n = norm(e.n), en = norm(e.en || '');
+        const n = norm(e.n).replace(/-/g, ' '), en = norm(e.en || '');
         if (raw && n.startsWith(raw)) return 3;
         if (raw && n.includes(raw)) return 2;
-        return (en.startsWith(toks.join(' ')) || esToks.every(t => n.includes(t)) || toks.every(t => n.includes(t) || en.includes(t))) ? 1 : 0;
+        return (en.startsWith(toks.join(' ')) || esToks.every(t => has(n, t)) || toks.every(t => n.includes(t) || en.includes(t))) ? 1 : 0;
       };
+      // Se calcula una vez por ejercicio; si el nombre coincide con lo buscado va antes que los populares
+      const score = new Map(items.map(e => [e.i, nameScore(e)]));
       items.sort((a, b) => {
         if (f.sort === 'az') return a.n.localeCompare(b.n);
         const ua = usage.get(a.i) || 0, ub = usage.get(b.i) || 0;
         if (f.sort === 'used' && ua !== ub) return ub - ua;
         if (ua !== ub) return ub - ua;
         if (!!a.custom !== !!b.custom) return a.custom ? -1 : 1;
+        const sa = score.get(a.i), sb = score.get(b.i); if (sa !== sb) return sb - sa;
         const pa = POPULAR.has(a.i), pb = POPULAR.has(b.i); if (pa !== pb) return pa ? -1 : 1;
-        const sa = nameScore(a), sb = nameScore(b); if (sa !== sb) return sb - sa;
         if (!!a.es !== !!b.es) return a.es ? -1 : 1;
         const ha = !!Store.HD(a.i), hb = !!Store.HD(b.i); if (ha !== hb) return ha ? -1 : 1;
         return a.n.length - b.n.length || a.n.localeCompare(b.n);
@@ -1237,7 +1244,7 @@
       ${stats}
       <div style="padding:12px 16px 0"><input class="title-input" data-field="title" value="${esc(w.title)}" placeholder="Nombre del entreno"></div>
       ${w.exercises.length ? w.exercises.map((e, ei) => awExHTML(L, e, ei, ssm)).join('') :
-        `<div class="empty-aw"><div class="big">💪</div><h4>Empieza añadiendo un ejercicio</h4><p>Toca el botón de abajo para elegir entre más de 1500 ejercicios.</p></div>`}
+        `<div class="empty-aw"><div class="big">💪</div><h4>Empieza añadiendo un ejercicio</h4><p>Toca el botón de abajo para elegir entre casi 2000 ejercicios.</p></div>`}
       <div class="aw-footer">
         <button class="btn primary block" data-act="addEx">${ic('plus')} Añadir ejercicio</button>
         <div class="row-flex">${w.exercises.length > 1 ? `<button class="btn block" data-act="reorder">${ic('swap')} Reordenar</button>` : ''}<button class="btn block" data-act="notes">${ic('note')} Notas</button></div>
