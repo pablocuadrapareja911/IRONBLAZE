@@ -44,7 +44,6 @@
     save: '<path d="M5 4h11l3 3v13H5zM8 4v5h7V4M8 20v-6h8v6"/>',
     repeat: '<path d="M17 2l4 4-4 4M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4M21 13v2a3 3 0 0 1-3 3H3"/>',
     yt: '<path d="M22 8.2a3 3 0 0 0-2.1-2.1C18 5.6 12 5.6 12 5.6s-6 0-7.9.5A3 3 0 0 0 2 8.2 31 31 0 0 0 1.6 12a31 31 0 0 0 .4 3.8 3 3 0 0 0 2.1 2.1c1.9.5 7.9.5 7.9.5s6 0 7.9-.5a3 3 0 0 0 2.1-2.1 31 31 0 0 0 .4-3.8 31 31 0 0 0-.4-3.8z"/><path d="m10 15 5-3-5-3z" fill="currentColor"/>',
-    globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/>',
     flame: '<path d="M12 22c4 0 7-3 7-7 0-4-3-6-4-10-2 2-3 4-3 6-1-1-2-2-2-4-3 3-5 5-5 8 0 4 3 7 7 7z"/>',
     user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7"/>',
     list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h0M3 12h0M3 18h0"/>',
@@ -1083,7 +1082,6 @@
       exId: id,
       data: { tab: 'sum', metric: k === 'weight' || k === 'bw' ? 'e1rm' : 'r', media: 'hd' },
       html: L => {
-        const trUrl = `https://translate.google.com/?sl=en&tl=es&op=translate&text=${encodeURIComponent(ex.x.join('\n'))}`;
         const hist = Store.exerciseHistory(id), rec = Store.records(id), t = L.data.tab;
         let body = '';
         const hd = Store.HD(ex.i), mode = hd ? L.data.media : 'gif';
@@ -1105,7 +1103,7 @@
             <div class="mm"><div class="l">Principal</div><div class="v">${ex.t.map(m => tr('muscles', m)).join(', ') || '—'}</div></div>
             <div class="mm"><div class="l">Secundarios</div><div class="v">${ex.s.map(m => tr('muscles', m)).join(', ') || '—'}</div></div>
           </div>
-          ${ex.x.length ? `<h2 class="section">Cómo se hace ${!ex.custom && !ex.es ? `<a class="link" href="${trUrl}" target="_blank" rel="noopener" style="font-size:13px">${ic('globe', 'ico')} Traducir</a>` : ''}</h2><ol class="steps">${ex.x.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : (!ex.custom && !ex.es && !Store.exerciseTextReady() ? '<h2 class="section">Cómo se hace</h2><p class="muted" style="font-size:13px">Cargando instrucciones…</p>' : '')}
+          ${ex.x.length || (!ex.custom && !ex.es && !Store.exerciseTextReady()) ? `<h2 class="section">Cómo se hace</h2>${ex.x.length ? `<ol class="steps">${ex.x.map(s => `<li>${esc(s)}</li>`).join('')}</ol>` : '<p class="muted" style="font-size:13px">Cargando instrucciones…</p>'}` : ''}
           ${ex.hyp ? HYPO.info(ex) : ''}
           ${rec.e1rm || rec.reps ? `<h2 class="section">Tus mejores marcas</h2>${recGrid(k, rec)}` : ''}`;
         if (t === 'hist') body = hist.length ? hist.map(h => `<div class="hist-card"><div class="hc-t">${esc(h.workout.title)}</div><div class="hc-d">${fmtDate(h.workout.start, true)}</div>${h.notes ? `<div class="hc-note">💬 ${esc(h.notes)}</div>` : ''}

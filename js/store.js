@@ -6,7 +6,7 @@
   const HD_BASE = 'https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/';
   const HD = id => { const h = window.HD_IMAGES && window.HD_IMAGES[id]; return h && h.length ? h.map(p => HD_BASE + p) : null; };
 
-  const VERSION = '1.8.8';
+  const VERSION = '1.8.9';
   const DATA_VERSION = 2; // súbelo si cambia el formato de los datos y añade la migración abajo
   const SNAP_KEY = 'ironblaze.snapshots';
 
@@ -63,13 +63,15 @@
     e = e || {};
     return { exId: ident(e.exId), notes: str(e.notes, 2000), ...(e.pin ? { pin: str(e.pin, 2000) } : {}), ss: e.ss ? ident(e.ss) : null, rest: num(e.rest) === '' ? null : Math.max(0, Math.min(3600, num(e.rest))), sets: arr(e.sets).slice(0, 100).map(s => cleanSet(s, withTargets)) };
   }
-  function sanitizeWorkout(w, withTargets) {
+  // active = entreno en curso: conserva los objetivos de cada serie y aún no tiene fin
+  function sanitizeWorkout(w, active) {
     w = w || {};
     const start = isFinite(+w.start) ? +w.start : Date.now();
     const o = {
-      id: ident(w.id) || uid(), title: str(w.title, 120), notes: str(w.notes, 5000), start, end: isFinite(+w.end) ? +w.end : start,
-      routineId: w.routineId ? ident(w.routineId) : null, exercises: arr(w.exercises).slice(0, 60).map(e => cleanEx(e, withTargets)).filter(e => e.exId)
+      id: ident(w.id) || uid(), title: str(w.title, 120), notes: str(w.notes, 5000), start,
+      routineId: w.routineId ? ident(w.routineId) : null, exercises: arr(w.exercises).slice(0, 60).map(e => cleanEx(e, active)).filter(e => e.exId)
     };
+    if (!active) o.end = isFinite(+w.end) ? +w.end : start;
     if (w.rest && isFinite(+w.rest.end)) o.rest = { end: +w.rest.end, total: +w.rest.total || 0 };
     return o;
   }
@@ -118,8 +120,7 @@
       ['weight', 'fat', 'waist', 'chest', 'arm', 'thigh'].forEach(k => { if (m && num(m[k]) !== '') o[k] = num(m[k]); });
       return o;
     });
-    st.active = st.active ? sanitizeWorkout(st.active, true) : null;
-    st.settings = sanitizeSettings(st.settings);
+    st.active = st.active ? sanitizeWorkout(st.active, true) : null;    st.settings = sanitizeSettings(st.settings);
     st.createdAt = isFinite(+st.createdAt) ? +st.createdAt : Date.now();
     return st;
   }
@@ -197,7 +198,7 @@
     else { e.esn = !!ESN[e.i]; e.n = ESN[e.i] || e.n.charAt(0).toUpperCase() + e.n.slice(1); if (!e.x) e.x = []; }
   }
   delete window.ES_NAMES; // ya aplicado: no hace falta mantenerlo en memoria
-  // Las instrucciones en inglés van en un archivo aparte (pesan el 80% de los datos) y se cargan
+  // Las instrucciones van en un archivo aparte (pesan la mayor parte de los datos) y se cargan
   // en segundo plano después de arrancar: así la app se abre mucho antes.
   let textP = null;
   function loadExerciseText() {
