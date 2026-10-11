@@ -871,6 +871,9 @@
     ['mancuernas', 'dumbbell'], ['mancuerna', 'dumbbell'], ['barra', 'barbell'], ['polea', 'cable'], ['sentado', 'seated'], ['de pie', 'standing'], ['tumbado', 'lying'],
     ['agarre cerrado', 'close-grip'], ['agarre', 'grip'], ['una mano', 'one arm'], ['un brazo', 'one arm'], ['una pierna', 'one leg'], ['giro ruso', 'russian twist'], ['rueda', 'wheel']
   ];
+  // Palabras que no aportan nada a la búsqueda ("patada de glúteo" = "patada glúteo")
+  const STOP = new Set(['de', 'del', 'con', 'en', 'la', 'el', 'las', 'los', 'a', 'al', 'y', 'para', 'por']);
+  const words = q => norm(q).split(/\s+/).filter(w => w && !STOP.has(w));
   function translateQuery(q) {
     let s = norm(q);
     for (const [es, en] of ES_EN) if (s.includes(es)) s = s.replace(es, en);
@@ -880,7 +883,7 @@
   function hay(e) {
     let h = hayCache.get(e.i);
     if (!h) {
-      h = norm([e.n, e.en || '', ...e.b, ...e.q, ...e.t, ...e.b.map(x => tr('bodyParts', x)), ...e.q.map(x => tr('equipment', x)), ...e.t.map(x => tr('muscles', x))].join(' '));
+      h = norm([e.n, e.en || '', ...e.b, ...e.q, ...e.t, ...e.b.map(x => tr('bodyParts', x)), ...e.q.map(x => tr('equipment', x)), ...e.t.map(x => tr('muscles', x)), ...e.s.map(x => tr('muscles', x))].join(' '));
       hayCache.set(e.i, h);
     }
     return h;
@@ -932,21 +935,23 @@
       const s = host.querySelector('.sentinel'); if (s) io.observe(s);
     }
     function apply() {
-      const toks = translateQuery(f.q), raw = norm(f.q).trim();
+      // Los nombres ya están en español: vale que coincidan las palabras tal cual o su traducción al inglés
+      const toks = translateQuery(f.q), esToks = words(f.q), raw = norm(f.q).trim();
+      const has = (h, t) => h.includes(t) || (t.length > 3 && t.endsWith('s') && h.includes(t.slice(0, -1)));
       items = Store.allExercises().filter(e => {
         if (f.bp !== 'all' && !e.b.includes(f.bp)) return false;
         if (f.eq !== 'all' && !e.q.includes(f.eq)) return false;
         if (!toks.length) return true;
         const h = hay(e);
         if (raw && norm(e.n).includes(raw)) return true;
-        return toks.every(t => h.includes(t) || (t.length > 3 && t.endsWith('s') && h.includes(t.slice(0, -1))));
+        return esToks.every(t => has(h, t)) || toks.every(t => has(h, t));
       });
       const nameScore = e => {
         if (!toks.length) return 0;
         const n = norm(e.n), en = norm(e.en || '');
         if (raw && n.startsWith(raw)) return 3;
         if (raw && n.includes(raw)) return 2;
-        return (en.startsWith(toks.join(' ')) || toks.every(t => n.includes(t) || en.includes(t))) ? 1 : 0;
+        return (en.startsWith(toks.join(' ')) || esToks.every(t => n.includes(t)) || toks.every(t => n.includes(t) || en.includes(t))) ? 1 : 0;
       };
       items.sort((a, b) => {
         if (f.sort === 'az') return a.n.localeCompare(b.n);
