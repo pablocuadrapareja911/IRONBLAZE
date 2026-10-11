@@ -112,7 +112,7 @@
   const parseVal = (k, v) => v === '' || isNaN(parseFloat(v)) ? '' : (k === 'cardio' ? parseFloat(v) : Store.fromDisplay(v));
 
   function thumb(ex, cls = '') {
-    if (ex.hyp) return `<div class="thumb hyp ${cls}">${HYPO.svg(ex.pose, { mini: true })}</div>`;
+    if (ex.hyp || ex.art) return `<div class="thumb hyp ${cls}">${exArt(ex, { mini: true })}</div>`;
     if (ex.custom) return `<div class="thumb custom ${cls}">${esc(ex.n.charAt(0).toUpperCase())}</div>`;
     return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" decoding="async" data-rm-err${fbAttr(ex)}></div>`;
   }
@@ -120,6 +120,8 @@
   const fitNote = t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
   const FIELD_SIZING = window.CSS && CSS.supports && CSS.supports('field-sizing', 'content');
   // Si la animación no carga (p. ej. bloqueos de LaLiga), la miniatura pasa a la foto HD cuando la hay
+  // Ejercicios con dibujo animado propio: hipopresivos (HYPO) y los que traen su función art()
+  const exArt = (ex, opts) => ex.art ? ex.art(opts) : HYPO.svg(ex.pose, opts);
   const fbAttr = ex => { const hd = !ex.th && Store.HD(ex.i); return hd ? ` data-fb="${hd[0]}"` : ''; };
   const exSub = ex => `${tr('bodyParts', ex.b[0])} · ${tr('equipment', ex.q[0])}`;
 
@@ -918,7 +920,7 @@
       const sel = opts.selected && opts.selected.has(e.i), n = usage.get(e.i);
       if (f.view === 'grid') {
         return `<div class="ex-card ${sel ? 'selected' : ''}" data-id="${e.i}">
-          <div class="ex-card-media">${e.hyp ? HYPO.svg(e.pose, { mini: true }) : e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" ${e.th ? 'class="ph" ' : ''}src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err${fbAttr(e)}>`}
+          <div class="ex-card-media">${e.hyp || e.art ? exArt(e, { mini: true }) : e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" ${e.th ? 'class="ph" ' : ''}src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err${fbAttr(e)}>`}
             ${Store.HD(e.i) ? '<span class="hd-badge">HD</span>' : ''}
             ${opts.selectable ? `<div class="check-dot">${sel ? ic('check') : ''}</div>` : ''}</div>
           <div class="ex-card-body"><div class="ex-card-name">${esc(e.n)}</div><div class="ex-card-sub">${exSub(e)}${n ? ` · <span style="color:var(--orange)">${n}×</span>` : ''}</div></div></div>`;
@@ -1079,7 +1081,7 @@
         let body = '';
         const hd = Store.HD(ex.i), mode = hd ? L.data.media : 'gif';
         if (t === 'sum') body = `
-          ${ex.hyp ? `<div class="ex-media hypo">${HYPO.svg(ex.pose, { anim: true })}</div>` : ex.custom ? `<div class="ex-media" style="background:var(--card)"><div style="font-size:80px;color:var(--orange);font-weight:800">${esc(ex.n.charAt(0).toUpperCase())}</div></div>` :
+          ${ex.hyp || ex.art ? `<div class="ex-media hypo">${exArt(ex, { anim: true })}</div>` : ex.custom ? `<div class="ex-media" style="background:var(--card)"><div style="font-size:80px;color:var(--orange);font-weight:800">${esc(ex.n.charAt(0).toUpperCase())}</div></div>` :
             mode === 'hd' ? `<div class="ex-media hd"><span class="loading">Cargando fotos HD…</span>
                 <img class="f0" src="${hd[0]}" alt="${esc(ex.n)}" data-media>${hd[1] ? `<img class="f1" src="${hd[1]}" alt="">` : ''}
                 <span class="media-badge">HD · INICIO ⇄ FINAL</span></div>` :
@@ -2813,7 +2815,7 @@
     const ids = new Set();
     S().routines.forEach(r => r.exercises.forEach(e => ids.add(e.exId)));
     S().workouts.slice(0, 20).forEach(w => w.exercises.forEach(e => ids.add(e.exId)));
-    const urls = [...ids].map(Store.getEx).filter(ex => !ex.custom && !ex.hyp && !ex.th).slice(0, 120).map(ex => Store.GIF(ex.i));
+    const urls = [...ids].map(Store.getEx).filter(ex => !ex.custom && !ex.hyp && !ex.th && !ex.art).slice(0, 120).map(ex => Store.GIF(ex.i));
     for (let i = 0; i < urls.length; i += 3) {
       const ok = await Promise.all(urls.slice(i, i + 3).map(u => fetch(u, { mode: 'no-cors' }).then(() => true, () => false)));
       if (ok.includes(false)) return; // bloqueado o sin conexión: se intenta otro día (o más tarde hoy)

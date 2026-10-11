@@ -1,6 +1,27 @@
 // Ejercicios que no están en ExerciseDB (hip thrust, patadas de glúteo, unilaterales…).
 // No tienen animación: se muestran con las fotos HD de inicio/fin de free-exercise-db (Unlicense).
 (function () {
+  // Dibujo animado (vista de frente) de la patada lateral en polea: no hay fotos ni animaciones libres de este ejercicio
+  function cableSideKick(opts = {}) {
+    const anim = !!opts.anim, dur = '3s', kt = '0;0.4;0.55;1';
+    const rest = { K: [122, 146], A: [123, 178], T: [130, 180] }, out = { K: [140, 139], A: [160, 166], T: [168, 164] };
+    const pose = anim ? rest : out, pts = q => `120 112 ${q.K} ${q.A}`;
+    const leg = `<polyline class="hyp-limb" stroke-width="12" points="${pts(pose)}">${anim ? `<animate attributeName="points" dur="${dur}" repeatCount="indefinite" keyTimes="${kt}" values="${[rest, out, out, rest].map(pts).join(';')}"/>` : ''}</polyline>`;
+    const mv = (attr, a, b) => anim ? `<animate attributeName="${attr}" dur="${dur}" repeatCount="indefinite" keyTimes="${kt}" values="${a};${b};${b};${a}"/>` : '';
+    const ankle = `<circle r="5" class="hyp-cuff" cx="${pose.A[0]}" cy="${pose.A[1]}">${mv('cx', rest.A[0], out.A[0])}${mv('cy', rest.A[1], out.A[1])}</circle>`;
+    const cable = `<line class="hyp-cable" x1="30" y1="172" x2="${pose.A[0]}" y2="${pose.A[1]}">${mv('x2', rest.A[0], out.A[0])}${mv('y2', rest.A[1], out.A[1])}</line>`;
+    const lbl = anim ? '<text x="100" y="20" text-anchor="middle" class="hyp-lbl">Pierna hacia fuera, despacio</text>' : '';
+    return `<svg class="hyp-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <line x1="14" y1="181" x2="186" y2="181" class="hyp-floor"/>
+      <rect x="20" y="30" width="16" height="150" rx="3" class="hyp-machine"/><circle cx="30" cy="172" r="6" class="hyp-pulley"/>
+      ${cable}
+      <polyline class="hyp-limb" stroke-width="12" points="100 112 98 146 97 178"/><polyline class="hyp-limb" stroke-width="7" points="97 178 89 180"/>
+      ${leg}${ankle}
+      <path class="hyp-body" d="M90 60 Q110 53 130 60 L124 116 Q110 121 96 116 Z"/>
+      <line x1="110" y1="58" x2="110" y2="44" stroke-width="9" class="hyp-limb"/><circle cx="110" cy="36" r="11.5" class="hyp-head"/>
+      <polyline class="hyp-limb" stroke-width="8" points="93 66 70 86 40 96"/><polyline class="hyp-limb" stroke-width="8" points="127 66 141 90 125 108"/>
+      ${lbl}</svg>`;
+  }
   const EX = [
     // ---------------- GLÚTEO ----------------
     { i: 'fx_hip_thrust', f: 'Barbell_Hip_Thrust', n: 'Hip thrust con barra', en: 'barbell hip thrust', b: ['upper legs'], q: ['barbell'], t: ['glutes'], s: ['hamstrings', 'quadriceps', 'core'],
@@ -21,6 +42,8 @@
       x: ['Ata un extremo de la banda a un poste bajo y el otro al tobillo.', 'Ponte de cara al poste y agárrate para mantener el equilibrio, con el pecho arriba.', 'Lleva la pierna hacia atrás todo lo que puedas sin arquear la espalda.', 'Vuelve despacio a la posición inicial y repite. Después, cambia de pierna.'] },
     { i: 'fx_side_kick', f: 'Side_Leg_Raises', n: 'Patada lateral de glúteo de pie', en: 'standing side leg raise (lateral kick)', b: ['upper legs'], q: ['body weight'], t: ['abductors'], s: ['glutes'],
       x: ['Ponte de pie junto a una silla o un apoyo y agárrate con una mano.', 'Apoya el peso en la pierna más cercana al apoyo.', 'Con la otra pierna estirada y la punta del pie hacia delante, elévala hacia el lado todo lo que puedas sin inclinar el tronco.', 'Baja controlando y repite. Después, cambia de pierna.', 'Para más intensidad, hazlo con tobillera lastrada, con una banda o enganchada a la polea baja.'] },
+    { i: 'fx_cable_side_kick', art: cableSideKick, n: 'Patada lateral de glúteo en polea', en: 'cable standing hip abduction (lateral kick)', b: ['upper legs'], q: ['cable'], t: ['abductors'], s: ['glutes'],
+      x: ['Coloca la tobillera en la polea baja y engánchala al tobillo de la pierna más alejada de la máquina.', 'Ponte de lado a la máquina, a un paso de distancia, y agárrate a ella con la mano más cercana.', 'Con el tronco recto y la pierna casi estirada, llévala hacia fuera (alejándola de la máquina) todo lo que puedas sin inclinarte.', 'Aprieta el glúteo un segundo arriba y vuelve despacio, cruzando un poco por delante de la pierna de apoyo.', 'Termina las repeticiones y cambia de lado.'] },
     // ---------------- PIERNA ----------------
     { i: 'fx_leg_ext_1', f: 'Single-Leg_Leg_Extension', n: 'Extensión de cuádriceps unilateral', en: 'single leg extension', b: ['upper legs'], q: ['leverage machine'], t: ['quads'], s: [],
       x: ['Siéntate en la máquina con el eje de giro a la altura de la rodilla y el rodillo sobre la parte baja de la espinilla.', 'Coloca solo una pierna bajo el rodillo y agárrate a las asas.', 'Extiende la rodilla hasta estirar la pierna y aprieta el cuádriceps 1 segundo arriba.', 'Baja despacio sin dejar caer el peso y repite. Después, cambia de pierna.'] },
@@ -49,7 +72,7 @@
   ];
   // ph = solo fotos, sin animación (la primera foto hace de miniatura)
   EX.forEach(({ f, ...e }) => {
-    window.HD_IMAGES[e.i] = [f + '/0.jpg', f + '/1.jpg'];
-    window.EXERCISE_DB.push({ es: true, esn: true, ph: true, ...e });
+    if (f) window.HD_IMAGES[e.i] = [f + '/0.jpg', f + '/1.jpg'];
+    window.EXERCISE_DB.push({ es: true, esn: true, ph: !!f, ...e });
   });
 })();
