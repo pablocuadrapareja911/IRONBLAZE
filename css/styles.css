@@ -89,7 +89,6 @@ img { display: block; }
 
 h2.section { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 22px 0 10px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
 h2.section .link { margin-left: auto; color: var(--orange); text-transform: none; letter-spacing: 0; font-size: 14px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
-h2.section .link .ico { width: 15px; height: 15px; }
 
 /* ---------- Buttons ---------- */
 .btn {
