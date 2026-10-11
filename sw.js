@@ -1,11 +1,11 @@
 // IRONBLAZE service worker: arranque instantáneo desde caché, modo sin conexión, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.8.3';
+const VERSION = '1.8.4';
 const APP = 'ironblaze-app-' + VERSION;   // archivos de la app (versión concreta)
 const MEDIA = 'ironblaze-media-v1';        // animaciones y fotos de ejercicios
 const FONTS = 'ironblaze-fonts-v2';        // tipografías de Google Fonts y librería de Firebase (v2: se guardan con CORS para poder comprobar su huella)
 const MEDIA_MAX = 400;                     // máximo de imágenes guardadas (evita llenar el móvil)
-const SHELL = ['./', 'index.html', 'css/styles.css', 'js/exercises-data.js', 'js/exercises-text.js', 'js/hypopressive.js', 'js/hd-images.js', 'js/es-content.js', 'js/i18n.js',
+const SHELL = ['./', 'index.html', 'css/styles.css', 'js/exercises-data.js', 'js/exercises-text.js', 'js/hypopressive.js', 'js/hd-images.js', 'js/extra-exercises.js', 'js/es-content.js', 'js/es-names.js', 'js/i18n.js',
   'js/store.js', 'js/bodymap.js', 'js/firebase-config.js', 'js/cloud.js', 'js/charts.js', 'js/app.js',
   'icons/icon-192.png', 'icons/logo-256.jpg', 'icons/favicon-64.png', 'manifest.webmanifest'];
 
