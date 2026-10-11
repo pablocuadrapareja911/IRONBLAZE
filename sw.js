@@ -1,6 +1,6 @@
 // IRONBLAZE service worker: arranque instantáneo desde caché, modo sin conexión, avisos de descanso y actualizaciones.
 // ⚠️ Cada vez que publiques cambios, sube VERSION: así los usuarios ven el aviso "Nueva versión disponible".
-const VERSION = '1.8.4';
+const VERSION = '1.8.5';
 const APP = 'ironblaze-app-' + VERSION;   // archivos de la app (versión concreta)
 const MEDIA = 'ironblaze-media-v1';        // animaciones y fotos de ejercicios
 const FONTS = 'ironblaze-fonts-v2';        // tipografías de Google Fonts y librería de Firebase (v2: se guardan con CORS para poder comprobar su huella)
@@ -28,6 +28,18 @@ async function trimMedia() {
   for (let i = 0; i < keys.length - MEDIA_MAX; i++) await c.delete(keys[i]); // borra las más antiguas
 }
 let trimTimer = null;
+// En España los operadores bloquean a ratos (partidos de LaLiga) las IP de Cloudflare donde están las animaciones:
+// la conexión se queda colgada en vez de fallar. Se corta a los 8 s y, durante 3 min, las siguientes fallan al
+// momento para que la app enseñe enseguida las fotos HD o un aviso en lugar de quedarse "cargando".
+let gifBlockedUntil = 0;
+async function fetchMedia(req, url) {
+  const gif = url.hostname === 'static.exercisedb.dev';
+  if (gif && Date.now() < gifBlockedUntil) return Response.error();
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 8000);
+  try { return await fetch(req, { signal: ctl.signal }); }
+  catch (err) { if (gif) gifBlockedUntil = Date.now() + 3 * 60e3; return Response.error(); }
+  finally { clearTimeout(timer); }
+}
 
 self.addEventListener('fetch', e => {
   const req = e.request, url = new URL(req.url);
@@ -38,7 +50,7 @@ self.addEventListener('fetch', e => {
     e.respondWith(caches.open(MEDIA).then(async c => {
       const hit = await c.match(req);
       if (hit) return hit;
-      const res = await fetch(req);
+      const res = await fetchMedia(req, url);
       if (res.ok || res.type === 'opaque') {
         c.put(req, res.clone());
         clearTimeout(trimTimer); trimTimer = setTimeout(trimMedia, 5000);
