@@ -114,11 +114,13 @@
   function thumb(ex, cls = '') {
     if (ex.hyp) return `<div class="thumb hyp ${cls}">${HYPO.svg(ex.pose, { mini: true })}</div>`;
     if (ex.custom) return `<div class="thumb custom ${cls}">${esc(ex.n.charAt(0).toUpperCase())}</div>`;
-    return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" decoding="async" data-rm-err></div>`;
+    return `<div class="thumb ${cls}"><img loading="lazy" src="${Store.GIF(ex.i)}" alt="" decoding="async" data-rm-err${fbAttr(ex)}></div>`;
   }
   // Ajusta la altura de las notas a su texto (el CSS lo hace solo en navegadores con field-sizing)
   const fitNote = t => { t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; };
   const FIELD_SIZING = window.CSS && CSS.supports && CSS.supports('field-sizing', 'content');
+  // Si la animación no carga (p. ej. bloqueos de LaLiga), la miniatura pasa a la foto HD cuando la hay
+  const fbAttr = ex => { const hd = !ex.th && Store.HD(ex.i); return hd ? ` data-fb="${hd[0]}"` : ''; };
   const exSub = ex => `${tr('bodyParts', ex.b[0])} · ${tr('equipment', ex.q[0])}`;
 
   // ---------------- Foto de perfil ----------------
@@ -913,7 +915,7 @@
       const sel = opts.selected && opts.selected.has(e.i), n = usage.get(e.i);
       if (f.view === 'grid') {
         return `<div class="ex-card ${sel ? 'selected' : ''}" data-id="${e.i}">
-          <div class="ex-card-media">${e.hyp ? HYPO.svg(e.pose, { mini: true }) : e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" ${e.th ? 'class="ph" ' : ''}src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err>`}
+          <div class="ex-card-media">${e.hyp ? HYPO.svg(e.pose, { mini: true }) : e.custom ? `<span class="ex-card-letter">${esc(e.n.charAt(0).toUpperCase())}</span>` : `<img loading="lazy" ${e.th ? 'class="ph" ' : ''}src="${Store.GIF(e.i)}" alt="${esc(e.n)}" decoding="async" data-rm-err${fbAttr(e)}>`}
             ${Store.HD(e.i) ? '<span class="hd-badge">HD</span>' : ''}
             ${opts.selectable ? `<div class="check-dot">${sel ? ic('check') : ''}</div>` : ''}</div>
           <div class="ex-card-body"><div class="ex-card-name">${esc(e.n)}</div><div class="ex-card-sub">${exSub(e)}${n ? ` · <span style="color:var(--orange)">${n}×</span>` : ''}</div></div></div>`;
@@ -2797,11 +2799,32 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden && stack.some(l => l.def.id === 'aw')) keepAwake(true); });
   // Evitar que la rueda cambie valores en inputs numéricos
   document.addEventListener('wheel', e => { if (document.activeElement && document.activeElement.type === 'number' && document.activeElement === e.target) e.target.blur(); }, { passive: true });
+  // Guarda en el móvil (una vez al día) las animaciones de tus rutinas y de lo último que has entrenado,
+  // para que se vean aunque el servidor esté bloqueado o no haya conexión
+  async function warmMedia() {
+    const today = new Date().toDateString();
+    try { if (localStorage.getItem('ib.warm') === today) return; } catch (e) { return; }
+    if (!navigator.onLine || !navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+    const ids = new Set();
+    S().routines.forEach(r => r.exercises.forEach(e => ids.add(e.exId)));
+    S().workouts.slice(0, 20).forEach(w => w.exercises.forEach(e => ids.add(e.exId)));
+    const urls = [...ids].map(Store.getEx).filter(ex => !ex.custom && !ex.hyp && !ex.th).slice(0, 120).map(ex => Store.GIF(ex.i));
+    for (let i = 0; i < urls.length; i += 3) {
+      const ok = await Promise.all(urls.slice(i, i + 3).map(u => fetch(u, { mode: 'no-cors' }).then(() => true, () => false)));
+      if (ok.includes(false)) return; // bloqueado o sin conexión: se intenta otro día (o más tarde hoy)
+    }
+    try { localStorage.setItem('ib.warm', today); } catch (e) {}
+  }
   // Imágenes: sustituye a los onload/onerror en línea (así la política de seguridad puede prohibir código en el HTML)
   document.addEventListener('error', e => {
     const t = e.target; if (!t || t.tagName !== 'IMG') return;
+    if (t.dataset.fb) { const fb = t.dataset.fb; t.removeAttribute('data-fb'); t.classList.add('ph'); t.src = fb; return; }
     if (t.hasAttribute('data-rm-err')) t.remove();
-    else if (t.hasAttribute('data-media')) { const l = t.parentNode && t.parentNode.querySelector('.loading'); if (l) l.textContent = 'Sin conexión: no se pudo cargar la imagen'; }
+    else if (t.hasAttribute('data-media')) {
+      const l = t.parentNode && t.parentNode.querySelector('.loading');
+      if (l) l.textContent = !navigator.onLine ? 'Sin conexión: no se pudo cargar la imagen'
+        : 'La animación no carga ahora mismo. En España suele pasar durante los partidos de fútbol (los operadores bloquean el servidor de las animaciones). Prueba más tarde o mira el vídeo.';
+    }
   }, true);
   document.addEventListener('load', e => {
     const t = e.target; if (!t || t.tagName !== 'IMG' || !t.hasAttribute('data-media')) return;
@@ -2811,6 +2834,7 @@
   initSW();
   // Lo que no hace falta para ver la primera pantalla se carga cuando el móvil queda libre
   (window.requestIdleCallback || (f => setTimeout(f, 2500)))(() => Store.loadExerciseText(), { timeout: 6000 });
+  setTimeout(warmMedia, 15000);
   // Arranque sin saltos: sin sesión guardada, la pantalla de acceso sale al instante; con sesión (o sin cuenta)
   // se entra directamente, porque los datos ya están en el móvil: Firebase termina de conectar por detrás.
   // (Antes el logo de carga esperaba a Firebase 1-3 s y luego la pantalla de inicio se redibujaba: "dos transiciones")
